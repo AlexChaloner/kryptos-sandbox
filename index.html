@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10100f" />
+    <title>Kryptos Sandbox</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"><span>K</span></div>
+          <div>
+            <h1>KRYPTOS <span>SANDBOX</span></h1>
+            <p>Cryptanalytic workbench</p>
+          </div>
+        </div>
+
+        <div class="project-title">
+          <button class="icon-button menu-button" aria-label="Open navigation">☰</button>
+          <div>
+            <div class="eyebrow">ACTIVE WORKSPACE</div>
+            <strong id="workspaceTitle">K4 / Transposition studies</strong>
+          </div>
+          <button class="text-icon" id="renameWorkspace" title="Rename workspace">✎</button>
+        </div>
+
+        <div class="top-actions">
+          <button class="button ghost" id="saveButton"><span>⌘</span> Save snapshot</button>
+          <button class="icon-button" id="helpButton" aria-label="Keyboard help">?</button>
+          <div class="avatar">KM</div>
+        </div>
+      </header>
+
+      <main class="main-layout">
+        <aside class="sidebar left-sidebar">
+          <div class="sidebar-heading">
+            <div>
+              <span class="eyebrow">LIBRARY</span>
+              <h2>Workspaces</h2>
+            </div>
+            <button class="icon-button small" id="addWorkspace" title="New workspace">＋</button>
+          </div>
+
+          <div class="workspace-tree" id="workspaceTree">
+            <button class="tree-row folder open"><span class="chevron">⌄</span><span class="folder-icon">▰</span><span>Kryptos</span><span class="count">4</span></button>
+            <div class="tree-children">
+              <button class="tree-row document active" data-name="K4 / Transposition studies"><span class="doc-icon">▦</span><span>K4 / Transposition studies</span><span class="status-dot"></span></button>
+              <button class="tree-row document" data-name="K3 Reconstruction"><span class="doc-icon">▦</span><span>K3 Reconstruction</span></button>
+              <button class="tree-row document" data-name="Berlin clock notes"><span class="doc-icon">▤</span><span>Berlin clock notes</span></button>
+              <button class="tree-row document" data-name="Vigenère experiments"><span class="doc-icon">▦</span><span>Vigenère experiments</span></button>
+            </div>
+            <button class="tree-row folder"><span class="chevron">›</span><span class="folder-icon">▰</span><span>Classical ciphers</span><span class="count">7</span></button>
+            <button class="tree-row folder"><span class="chevron">›</span><span class="folder-icon">▰</span><span>Archive</span><span class="count">12</span></button>
+          </div>
+
+          <div class="sidebar-spacer"></div>
+          <div class="quick-imports">
+            <span class="eyebrow">QUICK IMPORTS</span>
+            <button class="import-row" data-import="k1"><span class="import-icon amber">K1</span><span><strong>K1 ciphertext</strong><small>63 letters · 3 × 21 layout</small></span><b>＋</b></button>
+            <button class="import-row" data-import="k2"><span class="import-icon amber">K2</span><span><strong>K2 ciphertext</strong><small>372 positions · 12 × 31 layout</small></span><b>＋</b></button>
+            <button class="import-row" data-import="k3"><span class="import-icon amber">K3</span><span><strong>K3 ciphertext</strong><small>336 letters · 16 × 21 layout</small></span><b>＋</b></button>
+            <button class="import-row" data-import="k4"><span class="import-icon amber">K4</span><span><strong>K4 ciphertext</strong><small>97 positions · 7 × 14 layout</small></span><b>＋</b></button>
+            <button class="import-row" data-import="random-english"><span class="import-icon blue">EN</span><span><strong>Random English</strong><small>~100 letters · public-domain book</small></span><b>↻</b></button>
+            <button class="import-row" data-import="alphabet"><span class="import-icon amber">AZ</span><span><strong>Kryptos alphabet</strong><small>26-letter keyed alphabet</small></span><b>＋</b></button>
+            <button class="import-row" data-import="crib-east"><span class="import-icon blue">E</span><span><strong>EASTNORTHEAST</strong><small>K4 positions 22–34</small></span><b>＋</b></button>
+            <button class="import-row" data-import="crib-berlin"><span class="import-icon blue">B</span><span><strong>BERLINCLOCK</strong><small>K4 positions 64–74</small></span><b>＋</b></button>
+            <button class="import-row" data-import="positional"><span class="import-icon coral">?i</span><span><strong>Positional cribs</strong><small>Known letters, muted unknowns</small></span><b>＋</b></button>
+          </div>
+          <div class="recent-section">
+            <span class="eyebrow">RECENT CLIPS</span>
+            <button class="clip-row" data-clip="OBKRUOXOGHULBSOLIFBBWFLRVQQPRNGKSSO"><span class="clip-swatch amber"></span><span><strong>OBKRUOXOGHUL…</strong><small>97 chars · 12m ago</small></span></button>
+            <button class="clip-row" data-clip="BETWEENSUBTLESHADINGANDTHEABSENCEOFLIGHT"><span class="clip-swatch blue"></span><span><strong>BETWEENSUBTLE…</strong><small>43 chars · Yesterday</small></span></button>
+            <button class="clip-row" data-clip="PALIMPSEST"><span class="clip-swatch coral"></span><span><strong>PALIMPSEST</strong><small>10 chars · 4d ago</small></span></button>
+          </div>
+          <button class="trash-row"><span>♲</span> Trash <span class="count">3</span></button>
+        </aside>
+
+        <section class="workspace-wrap">
+          <div class="workspace-toolbar">
+            <div class="tool-group">
+              <button class="tool-button active" data-mode="select" title="Select (V)"><span>↖</span> Select</button>
+              <button class="tool-button" data-mode="pan" title="Pan (H)"><span>✥</span> Pan</button>
+              <button class="tool-button" id="addGrid"><span>▦</span> New grid</button>
+            </div>
+            <div class="tool-separator"></div>
+            <div class="tool-group compact">
+              <button class="tool-button icon-only" id="undoAction" title="Undo (Ctrl/Cmd + Z)" disabled>↶</button>
+              <button class="tool-button icon-only" id="redoAction" title="Redo (Ctrl/Cmd + Shift + Z)" disabled>↷</button>
+            </div>
+            <div class="tool-separator"></div>
+            <div class="tool-group compact">
+              <button class="tool-button icon-only" id="rotateLeft" title="Rotate selected left">↶</button>
+              <button class="tool-button icon-only" id="rotateRight" title="Rotate selected right">↷</button>
+              <button class="tool-button icon-only" id="transpose" title="Transpose selected">⤢</button>
+              <button class="tool-button icon-only" id="duplicateGrid" title="Duplicate selected">⧉</button>
+              <div class="clone-extend-control">
+                <button class="tool-button" id="cloneExtend" title="Repeat the selected letters or grid N times"><span>×N</span> Clone extend</button>
+                <div class="clone-extend-popover hidden" id="cloneExtendPopover">
+                  <div><strong>Repeat count</strong><output id="repeatCountValue">2×</output></div>
+                  <input id="repeatCount" type="range" min="1" max="100" value="2" />
+                  <small id="repeatPreview">Select a grid or some letters to repeat.</small>
+                  <div class="clone-extend-actions"><button id="cancelCloneExtend">Cancel</button><button class="accent" id="applyCloneExtend">Create grid</button></div>
+                </div>
+              </div>
+              <button class="tool-button icon-only" id="createSyncedView" title="Create synchronized view">⇄</button>
+              <button class="tool-button icon-only danger-hover" id="deleteGrid" title="Delete selected">⌫</button>
+            </div>
+            <div class="toolbar-hint"><kbd>Ctrl</kbd> + drag adds a rectangle</div>
+            <div class="zoom-control">
+              <button id="zoomOut">−</button><span id="zoomLabel">100%</span><button id="zoomIn">＋</button>
+            </div>
+          </div>
+
+          <div class="workspace" id="workspace">
+            <div class="workspace-grid"></div>
+            <div class="empty-state" id="emptyState">
+              <span>▦</span><strong>No grids yet</strong><small>Create a grid or paste some text to begin.</small>
+            </div>
+          </div>
+
+          <div class="statusbar">
+            <div><span class="live-dot"></span><span id="statusText">Ready</span></div>
+            <div><span id="gridCount">0 grids</span><span class="status-separator"></span><span id="selectionCount">No selection</span><span class="status-separator"></span><span>Autosnap 8 px</span></div>
+          </div>
+        </section>
+
+        <aside class="sidebar right-sidebar">
+          <div class="inspector-tabs">
+            <button class="active" data-tab="properties">Properties</button>
+            <button data-tab="analysis">Analysis</button>
+          </div>
+
+          <div class="tab-panel active" id="propertiesPanel">
+            <section class="inspector-section">
+              <div class="section-title"><span>GRID</span><button class="collapse">⌃</button></div>
+              <label class="field-label" for="gridName">Name</label>
+              <input class="text-input" id="gridName" value="Select a grid" disabled />
+              <div class="field-pair">
+                <label><span>Columns</span><input id="gridColumns" type="number" min="1" max="500" disabled /></label>
+                <label><span>Cell size</span><div class="unit-input"><input id="cellSize" type="number" min="20" max="64" disabled /><i>px</i></div></label>
+              </div>
+              <label class="field-label" for="gridText">Grid text</label>
+              <textarea id="gridText" class="text-area" placeholder="Paste letters here…" disabled></textarea>
+              <div class="mini-actions">
+                <button id="pasteText">Paste</button><button id="copyText">Copy</button><button id="applyText" class="accent">Apply</button>
+              </div>
+            </section>
+
+            <section class="inspector-section">
+              <div class="section-title"><span>ALPHABET</span><button class="collapse">⌃</button></div>
+              <div class="segmented" id="alphabetPreset">
+                <button class="active" data-alphabet="KRYPTOSABCDEFGHIJLMNQUVWXZ">Kryptos</button>
+                <button data-alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ">A–Z</button>
+                <button data-alphabet="custom">Custom</button>
+              </div>
+              <div class="alphabet-preview" id="alphabetPreview"></div>
+              <input class="text-input custom-alphabet hidden" id="customAlphabet" maxlength="60" placeholder="Enter unique symbols" />
+            </section>
+
+            <section class="inspector-section">
+              <div class="section-title"><span>GRID OPERATIONS</span><button class="collapse">⌃</button></div>
+              <div class="operand-stack" id="operandStack">
+                <div><b>A</b><span id="operandA">Select first grid</span></div>
+                <div><b>B</b><span id="operandB">Select second grid</span></div>
+              </div>
+              <button class="operation-button" id="runGridOperation" disabled>Create live result from A and B</button>
+              <div class="switch-row"><span><strong>Snap & combine</strong><small>Add letters when grids overlap</small></span><label class="switch"><input id="snapCombine" type="checkbox" checked /><i></i></label></div>
+              <div class="switch-row"><span><strong>Show indices</strong><small>Display alphabet values in cells</small></span><label class="switch"><input id="showIndices" type="checkbox" /><i></i></label></div>
+              <label class="field-label">Combine operation</label>
+              <select class="select-input" id="combineOperation"><option value="add">Add (A + B)</option><option value="subtract">Subtract (A − B)</option></select>
+            </section>
+          </div>
+
+          <div class="tab-panel" id="analysisPanel">
+            <section class="analysis-hero">
+              <span class="eyebrow">CURRENT SELECTION</span>
+              <div class="selection-sequence" id="analysisSequence">—</div>
+              <div class="analysis-meta"><span id="analysisLength">0 characters</span><button id="analyseAll">Use full grid</button></div>
+            </section>
+            <section class="metric-card">
+              <div class="metric-head"><span>INDEX OF COINCIDENCE</span><button title="Chance that two randomly selected letters match">i</button></div>
+              <div class="metric-value"><strong id="icValue">—</strong><span>English ≈ 0.0667</span></div>
+              <div class="meter"><i id="icMeter"></i><b class="english-mark"></b></div>
+              <div class="null-result"><span>Random null likelihood</span><strong id="icPValue">—</strong></div>
+              <div class="null-result secondary"><span>Null SE · z-score</span><strong id="icReliability">—</strong></div>
+            </section>
+            <section class="metric-card">
+              <div class="metric-head"><span>ENGLISH FREQUENCY FIT</span><button title="Chi-square goodness of fit against English letter frequencies">i</button></div>
+              <div class="metric-value"><strong id="freqFit">—</strong><span>similarity score</span></div>
+              <div class="meter warm"><i id="freqMeter"></i></div>
+              <div class="null-result"><span>Random string matches this well</span><strong id="freqPValue">—</strong></div>
+            </section>
+            <section class="inspector-section period-analysis">
+              <div class="section-title"><span>VIGENÈRE PERIOD SCAN</span><button title="Average IC down the vertical columns for each candidate key length">i</button></div>
+              <p class="analysis-explanation">Test candidate key lengths by averaging the IC of their vertical columns.</p>
+              <div class="period-range-head"><label for="periodScanMax">Test periods 1–<output id="periodScanMaxValue">24</output></label><span>English ≈ .0667</span></div>
+              <input id="periodScanMax" class="period-range" type="range" min="2" max="40" value="24" />
+              <div class="period-scan-list" id="periodScanList"><div class="chart-placeholder">Select enough letters to scan</div></div>
+              <div class="period-detail hidden" id="periodDetail">
+                <div class="period-detail-head"><span>Candidate period <strong id="chosenPeriod">—</strong></span><span>Avg IC <b id="chosenPeriodIc">—</b></span></div>
+                <div class="period-significance">
+                  <span>Null SE <b id="periodNullSe">—</b></span><span>z <b id="periodZScore">—</b></span><span>p <b id="periodPValue">—</b></span>
+                </div>
+                <div class="period-null-band">95% random range <strong id="periodNullBand">—</strong></div>
+                <label class="field-label" for="candidateKey">Candidate key</label>
+                <input class="text-input candidate-key" id="candidateKey" autocomplete="off" spellcheck="false" />
+                <div class="suggested-key">Column frequency estimate <strong id="suggestedKey">—</strong></div>
+                <label class="field-label">Decryption preview</label>
+                <div class="decrypt-preview" id="decryptPreview">—</div>
+                <div class="column-analysis" id="columnAnalysis"></div>
+              </div>
+            </section>
+            <section class="inspector-section stride-analysis">
+              <div class="section-title"><span>MODULAR ROUTE SCAN</span><button title="Read the text at each coprime step modulo its length and rank the resulting routes">i</button></div>
+              <p class="analysis-explanation">Test every full-cycle stride N. Rank direct English, or undo a transposition and search the result for a Vigenère key length.</p>
+              <label class="field-label" for="strideScoreMode">Scoring model</label>
+              <select class="select-input" id="strideScoreMode">
+                <option value="ngrams">English bigram + trigram + quadgram</option>
+                <option value="layered">Hidden Vigenère · max column IC</option>
+              </select>
+              <div class="stride-options">
+                <label><input id="strideVirtualGap" type="checkbox" checked /> Also test a virtual +1 gap</label>
+                <label><input class="ngram-size" type="checkbox" value="2" checked /> 2-gram</label>
+                <label><input class="ngram-size" type="checkbox" value="3" checked /> 3-gram</label>
+                <label><input class="ngram-size" type="checkbox" value="4" checked /> 4-gram</label>
+              </div>
+              <div class="layered-key-limit hidden" id="layeredKeyLimit">
+                <label for="layeredKeyMax">Maximum Vigenère key length <output id="layeredKeyMaxValue">24</output></label>
+                <input id="layeredKeyMax" type="range" min="2" max="40" value="24" />
+              </div>
+              <div class="stride-status" id="strideStatus">Select at least 8 letters; the scan starts automatically when the selection settles.</div>
+              <div class="stride-results" id="strideResults"></div>
+              <div class="stride-detail hidden" id="strideDetail">
+                <div class="period-detail-head"><span>Step <strong id="strideStep">—</strong> mod <strong id="strideModulus">—</strong></span><span>adjusted score <b id="strideScore">—</b></span></div>
+                <div class="stride-evidence" id="strideEvidence"></div>
+                <label class="field-label">Route preview</label>
+                <div class="decrypt-preview" id="stridePreview">—</div>
+                <div class="layered-preview hidden" id="layeredPreview">
+                  <button class="operation-button intermediate-grid-button" id="createLayeredIntermediateGrid">Create intermediate grid before Vigenère</button>
+                  <label class="field-label" for="layeredCandidateKey">Estimated Vigenère key</label>
+                  <input class="text-input candidate-key" id="layeredCandidateKey" autocomplete="off" spellcheck="false" />
+                  <div class="decrypt-preview" id="layeredDecryptPreview">—</div>
+                </div>
+                <button class="operation-button" id="createStrideGrid">Create route as grid</button>
+                <p class="route-caveat">The n-gram z-score is standardized within the scanned route family. In layered mode, the displayed p-value is for the winning L before correction for maximizing over lengths. A strong route exposes structure; it does not by itself prove the historical construction.</p>
+              </div>
+            </section>
+            <section class="inspector-section frequency-section">
+              <div class="section-title"><span>LETTER FREQUENCIES</span><button class="collapse">⌃</button></div>
+              <div class="frequency-chart" id="frequencyChart"><div class="chart-placeholder">Select letters to analyse</div></div>
+            </section>
+            <section class="inspector-section">
+              <div class="section-title"><span>TOP BIGRAMS</span><button class="collapse">⌃</button></div>
+              <div class="bigram-list" id="bigramList"><span>—</span></div>
+            </section>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <div class="context-menu hidden" id="contextMenu" role="menu"></div>
+    <div class="modal-backdrop hidden" id="helpModal">
+      <div class="modal">
+        <div class="modal-head"><div><span class="eyebrow">QUICK REFERENCE</span><h2>Workspace controls</h2></div><button id="closeHelp">×</button></div>
+        <div class="shortcut-grid">
+          <kbd>Drag header</kbd><span>Move a grid around the canvas</span>
+          <kbd>Drag edge</kbd><span>Resize a grid card</span>
+          <kbd>Drag cells</kbd><span>Select a horizontal strip</span>
+          <kbd>Ctrl + drag</kbd><span>Add a rectangular cell selection</span>
+          <kbd>Ctrl + click</kbd><span>Add a cell, or add/remove an operand via its header</span>
+          <kbd>⌘/Ctrl + C</kbd><span>Copy selected letters</span>
+          <kbd>⌘/Ctrl + V</kbd><span>Paste directly into the selected grid or cells</span>
+          <kbd>⌘/Ctrl + Z</kbd><span>Undo the last workspace change</span>
+          <kbd>Delete</kbd><span>Delete selected grid</span>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="app.js?v=3"></script>
+  </body>
+</html>
