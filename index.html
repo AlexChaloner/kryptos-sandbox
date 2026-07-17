@@ -5,10 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#10100f" />
     <title>Kryptos Sandbox</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%23171715'/%3E%3Ctext x='32' y='44' text-anchor='middle' font-size='40' fill='%23f4c46e'%3EK%3C/text%3E%3C/svg%3E" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=2" />
+    <link rel="stylesheet" href="styles.css?v=3" />
   </head>
   <body>
     <div class="app-shell">
@@ -22,7 +23,6 @@
         </div>
 
         <div class="project-title">
-          <button class="icon-button menu-button" aria-label="Open navigation">☰</button>
           <div>
             <div class="eyebrow">ACTIVE WORKSPACE</div>
             <strong id="workspaceTitle">K4 / Transposition studies</strong>
@@ -31,7 +31,6 @@
         </div>
 
         <div class="top-actions">
-          <button class="button ghost" id="saveButton"><span>⌘</span> Save snapshot</button>
           <button class="icon-button" id="helpButton" aria-label="Keyboard help">?</button>
           <button class="avatar" id="aboutButton" type="button" aria-label="About Alex" aria-haspopup="dialog" aria-controls="aboutModal">AC</button>
         </div>
@@ -47,17 +46,7 @@
             <button class="icon-button small" id="addWorkspace" title="New workspace">＋</button>
           </div>
 
-          <div class="workspace-tree" id="workspaceTree">
-            <button class="tree-row folder open"><span class="chevron">⌄</span><span class="folder-icon">▰</span><span>Kryptos</span><span class="count">4</span></button>
-            <div class="tree-children">
-              <button class="tree-row document active" data-name="K4 / Transposition studies"><span class="doc-icon">▦</span><span>K4 / Transposition studies</span><span class="status-dot"></span></button>
-              <button class="tree-row document" data-name="K3 Reconstruction"><span class="doc-icon">▦</span><span>K3 Reconstruction</span></button>
-              <button class="tree-row document" data-name="Berlin clock notes"><span class="doc-icon">▤</span><span>Berlin clock notes</span></button>
-              <button class="tree-row document" data-name="Vigenère experiments"><span class="doc-icon">▦</span><span>Vigenère experiments</span></button>
-            </div>
-            <button class="tree-row folder"><span class="chevron">›</span><span class="folder-icon">▰</span><span>Classical ciphers</span><span class="count">7</span></button>
-            <button class="tree-row folder"><span class="chevron">›</span><span class="folder-icon">▰</span><span>Archive</span><span class="count">12</span></button>
-          </div>
+          <div class="workspace-tree" id="workspaceTree"><div class="tree-empty">Loading workspaces…</div></div>
 
           <div class="sidebar-spacer"></div>
           <div class="quick-imports">
@@ -73,12 +62,11 @@
             <button class="import-row" data-import="positional"><span class="import-icon coral">?i</span><span><strong>Positional cribs</strong><small>Known letters, muted unknowns</small></span><b>＋</b></button>
           </div>
           <div class="recent-section">
-            <span class="eyebrow">RECENT CLIPS</span>
-            <button class="clip-row" data-clip="OBKRUOXOGHULBSOLIFBBWFLRVQQPRNGKSSO"><span class="clip-swatch amber"></span><span><strong>OBKRUOXOGHUL…</strong><small>97 chars · 12m ago</small></span></button>
-            <button class="clip-row" data-clip="BETWEENSUBTLESHADINGANDTHEABSENCEOFLIGHT"><span class="clip-swatch blue"></span><span><strong>BETWEENSUBTLE…</strong><small>43 chars · Yesterday</small></span></button>
-            <button class="clip-row" data-clip="PALIMPSEST"><span class="clip-swatch coral"></span><span><strong>PALIMPSEST</strong><small>10 chars · 4d ago</small></span></button>
+            <span class="eyebrow">STARTER CLIPS</span>
+            <button class="clip-row" data-clip="OBKRUOXOGHULBSOLIFBBWFLRVQQPRNGKSSO"><span class="clip-swatch amber"></span><span><strong>OBKRUOXOGHUL…</strong><small>35 letters · K4 opening</small></span></button>
+            <button class="clip-row" data-clip="BETWEENSUBTLESHADINGANDTHEABSENCEOFLIGHT"><span class="clip-swatch blue"></span><span><strong>BETWEENSUBTLE…</strong><small>43 letters · K1 plaintext</small></span></button>
+            <button class="clip-row" data-clip="PALIMPSEST"><span class="clip-swatch coral"></span><span><strong>PALIMPSEST</strong><small>10 letters · K1 keyword</small></span></button>
           </div>
-          <button class="trash-row"><span>♲</span> Trash <span class="count">3</span></button>
         </aside>
 
         <section class="workspace-wrap">
@@ -138,7 +126,7 @@
 
           <div class="tab-panel active" id="propertiesPanel">
             <section class="inspector-section">
-              <div class="section-title"><span>GRID</span><button class="collapse">⌃</button></div>
+              <div class="section-title"><span>GRID</span><button class="collapse" type="button" aria-label="Collapse Grid section" aria-expanded="true">⌃</button></div>
               <label class="field-label" for="gridName">Name</label>
               <input class="text-input" id="gridName" value="Select a grid" disabled />
               <div class="field-pair">
@@ -153,7 +141,7 @@
             </section>
 
             <section class="inspector-section">
-              <div class="section-title"><span>ALPHABET</span><button class="collapse">⌃</button></div>
+              <div class="section-title"><span>ALPHABET</span><button class="collapse" type="button" aria-label="Collapse Alphabet section" aria-expanded="true">⌃</button></div>
               <div class="segmented" id="alphabetPreset">
                 <button class="active" data-alphabet="KRYPTOSABCDEFGHIJLMNQUVWXZ">Kryptos</button>
                 <button data-alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ">A–Z</button>
@@ -164,7 +152,7 @@
             </section>
 
             <section class="inspector-section">
-              <div class="section-title"><span>GRID OPERATIONS</span><button class="collapse">⌃</button></div>
+              <div class="section-title"><span>GRID OPERATIONS</span><button class="collapse" type="button" aria-label="Collapse Grid operations section" aria-expanded="true">⌃</button></div>
               <div class="operand-stack" id="operandStack">
                 <div><b>A</b><span id="operandA">Select first grid</span></div>
                 <div><b>B</b><span id="operandB">Select second grid</span></div>
@@ -184,20 +172,20 @@
               <div class="analysis-meta"><span id="analysisLength">0 characters</span><button id="analyseAll">Use full grid</button></div>
             </section>
             <section class="metric-card">
-              <div class="metric-head"><span>INDEX OF COINCIDENCE</span><button title="Chance that two randomly selected letters match">i</button></div>
+              <div class="metric-head"><span>INDEX OF COINCIDENCE</span><button class="info-button" type="button" data-info="Chance that two randomly selected letters match" title="Chance that two randomly selected letters match" aria-label="Explain index of coincidence">i</button></div>
               <div class="metric-value"><strong id="icValue">—</strong><span>English ≈ 0.0667</span></div>
               <div class="meter"><i id="icMeter"></i><b class="english-mark"></b></div>
               <div class="null-result"><span>Random null likelihood</span><strong id="icPValue">—</strong></div>
               <div class="null-result secondary"><span>Null SE · z-score</span><strong id="icReliability">—</strong></div>
             </section>
             <section class="metric-card">
-              <div class="metric-head"><span>ENGLISH FREQUENCY FIT</span><button title="Chi-square goodness of fit against English letter frequencies">i</button></div>
+              <div class="metric-head"><span>ENGLISH FREQUENCY FIT</span><button class="info-button" type="button" data-info="Chi-square goodness of fit against English letter frequencies" title="Chi-square goodness of fit against English letter frequencies" aria-label="Explain English frequency fit">i</button></div>
               <div class="metric-value"><strong id="freqFit">—</strong><span>similarity score</span></div>
               <div class="meter warm"><i id="freqMeter"></i></div>
               <div class="null-result"><span>Random string matches this well</span><strong id="freqPValue">—</strong></div>
             </section>
             <section class="inspector-section period-analysis">
-              <div class="section-title"><span>VIGENÈRE PERIOD SCAN</span><button title="Average IC down the vertical columns for each candidate key length">i</button></div>
+              <div class="section-title"><span>VIGENÈRE PERIOD SCAN</span><button class="info-button" type="button" data-info="Average IC down the vertical columns for each candidate key length" title="Average IC down the vertical columns for each candidate key length" aria-label="Explain Vigenère period scan">i</button></div>
               <p class="analysis-explanation">Test candidate key lengths by averaging the IC of their vertical columns.</p>
               <div class="period-range-head"><label for="periodScanMax">Test periods 1–<output id="periodScanMaxValue">24</output></label><span>English ≈ .0667</span></div>
               <input id="periodScanMax" class="period-range" type="range" min="2" max="40" value="24" />
@@ -217,7 +205,7 @@
               </div>
             </section>
             <section class="inspector-section stride-analysis">
-              <div class="section-title"><span>MODULAR ROUTE SCAN</span><button title="Read the text at each coprime step modulo its length and rank the resulting routes">i</button></div>
+              <div class="section-title"><span>MODULAR ROUTE SCAN</span><button class="info-button" type="button" data-info="Read the text at each coprime step modulo its length and rank the resulting routes" title="Read the text at each coprime step modulo its length and rank the resulting routes" aria-label="Explain modular route scan">i</button></div>
               <p class="analysis-explanation">Test every full-cycle stride N. Rank direct English, or undo a transposition and search the result for a Vigenère key length.</p>
               <label class="field-label" for="strideScoreMode">Scoring model</label>
               <select class="select-input" id="strideScoreMode">
@@ -252,11 +240,11 @@
               </div>
             </section>
             <section class="inspector-section frequency-section">
-              <div class="section-title"><span>LETTER FREQUENCIES</span><button class="collapse">⌃</button></div>
+              <div class="section-title"><span>LETTER FREQUENCIES</span><button class="collapse" type="button" aria-label="Collapse Letter frequencies section" aria-expanded="true">⌃</button></div>
               <div class="frequency-chart" id="frequencyChart"><div class="chart-placeholder">Select letters to analyse</div></div>
             </section>
             <section class="inspector-section">
-              <div class="section-title"><span>TOP BIGRAMS</span><button class="collapse">⌃</button></div>
+              <div class="section-title"><span>TOP BIGRAMS</span><button class="collapse" type="button" aria-label="Collapse Top bigrams section" aria-expanded="true">⌃</button></div>
               <div class="bigram-list" id="bigramList"><span>—</span></div>
             </section>
           </div>
@@ -296,6 +284,6 @@
         </div>
       </div>
     </div>
-    <script type="module" src="app.js?v=4"></script>
+    <script type="module" src="app.js?v=5"></script>
   </body>
 </html>

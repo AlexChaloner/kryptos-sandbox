@@ -64,13 +64,9 @@ button { cursor: pointer; }
 .text-icon:hover { color: var(--amber); }
 
 .top-actions { justify-content: flex-end; gap: 8px; padding: 0 16px; border-left: 1px solid var(--line); }
-.button { border: 1px solid var(--line); background: var(--panel-2); border-radius: 4px; padding: 8px 11px; }
-.button:hover { border-color: #55554d; background: var(--panel-3); }
-.button span { color: var(--amber); margin-right: 6px; }
 .icon-button { width: 32px; height: 32px; border: 1px solid var(--line); background: var(--panel-2); border-radius: 4px; display: grid; place-items: center; color: var(--muted); }
 .icon-button:hover { color: var(--text); border-color: #55554d; }
 .icon-button.small { width: 26px; height: 26px; }
-.menu-button { display: none; }
 .avatar { width: 32px; height: 32px; padding: 0; display: grid; place-items: center; background: #3c3224; border: 1px solid #72572f; color: var(--amber-bright); border-radius: 50%; font-size: 10px; font-weight: 700; transition: background .15s, border-color .15s, transform .15s; }
 .avatar:hover, .avatar:focus-visible { background: #4a3c29; border-color: var(--amber); outline: none; transform: translateY(-1px); }
 
@@ -115,9 +111,6 @@ button { cursor: pointer; }
 .clip-swatch { width: 3px; align-self: stretch; min-height: 30px; border-radius: 3px; background: var(--amber); }
 .clip-swatch.blue { background: var(--blue); }
 .clip-swatch.coral { background: var(--coral); }
-.trash-row { height: 36px; padding: 0 9px; border: 0; border-top: 1px solid var(--line-soft); background: none; color: var(--faint); display: flex; gap: 9px; align-items: center; text-align: left; }
-.trash-row .count { margin-left: auto; }
-
 .workspace-wrap { min-width: 0; display: grid; grid-template-rows: var(--toolbar) minmax(0, 1fr) 28px; background: #0f0f0e; }
 .workspace-toolbar { position: relative; z-index: 80; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #1b1b19; border-bottom: 1px solid var(--line); overflow: visible; }
 .tool-group { display: flex; align-items: center; gap: 3px; }
@@ -218,7 +211,10 @@ kbd { font: 9px "DM Mono", monospace; color: #bab9ae; border: 1px solid #4a4a44;
 .tab-panel.active { display: block; flex: 1; }
 .inspector-section { padding: 16px; border-bottom: 1px solid var(--line-soft); }
 .section-title { display: flex; justify-content: space-between; align-items: center; color: #aaa99f; font-size: 10px; font-weight: 700; letter-spacing: 1.3px; margin-bottom: 14px; }
-.collapse { border: 0; background: none; color: var(--faint); font-size: 10px; }
+.inspector-section.collapsed > :not(.section-title) { display: none; }
+.inspector-section.collapsed > .section-title { margin-bottom: 0; }
+.collapse { width: 22px; height: 22px; padding: 0; border: 0; background: none; color: var(--faint); font-size: 10px; border-radius: 3px; }
+.collapse:hover, .collapse:focus-visible { background: var(--panel-3); color: var(--amber-bright); outline: none; }
 .field-label, .field-pair label > span { display: block; color: var(--muted); font-size: 11px; margin: 11px 0 6px; }
 .text-input, .text-area, .select-input, .unit-input { width: 100%; background: #121211; border: 1px solid #3a3a35; border-radius: 3px; outline: none; }
 .text-input, .select-input { height: 32px; padding: 0 9px; }
@@ -269,6 +265,7 @@ input:disabled, textarea:disabled { opacity: .45; cursor: not-allowed; }
 .metric-card { margin: 12px 12px 0; padding: 13px; border: 1px solid #383832; background: #1e1e1b; border-radius: 4px; }
 .metric-head { display: flex; justify-content: space-between; color: var(--muted); font-size: 8px; letter-spacing: 1px; font-weight: 700; }
 .metric-head button { width: 15px; height: 15px; border-radius: 50%; border: 1px solid #4a4a43; background: none; color: var(--faint); font: 8px serif; padding: 0; }
+.info-button:hover, .info-button:focus-visible { border-color: var(--amber) !important; color: var(--amber-bright) !important; outline: none; }
 .metric-value { display: flex; justify-content: space-between; align-items: baseline; margin: 10px 0 9px; }
 .metric-value strong { font: 500 23px "DM Mono", monospace; color: #deddd3; }
 .metric-value span { font-size: 8px; color: var(--faint); }

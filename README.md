@@ -27,9 +27,10 @@ The development server disables caching and enables automatic source-file reload
 - Scan candidate Vigenère key lengths using average vertical-column IC with exact uniform-null standard errors, sample-size-adjusted z-scores, approximate p-values, and 95% null bands; inspect each column, infer frequency-based key letters under the active alphabet, and preview candidate decryptions.
 - Automatically scan every coprime modular transposition stride when the active grid or cell selection changes, using English 2/3/4-gram evidence or the maximum adjusted column-IC score found over a second scan of possible hidden Vigenère key lengths.
 - Materialize the winning layered route as an intermediate pre-Vigenère grid whose column count equals the detected key length.
-- Save the current workspace to browser local storage.
+- Automatically persist workspace folders, grids, preferences, and undo history in browser local storage.
 - Undo and redo up to 100 document changes using the toolbar or standard keyboard shortcuts.
 - Import K1–K4, either known K4 crib independently, or a matching 7×14 positional mask with low-opacity `?` unknown slots from the left sidebar.
+- Start from populated K1, K2, and K3 solution workspaces containing aligned ciphertext and known plaintext grids.
 - Import the Kryptos keyed alphabet or a random cleaned passage of roughly 100 letters from a public-domain book.
 - Repeat a selected grid/cell sequence N times from the toolbar's inline Clone extend slider.
 - Create independent persistent workspaces, organize them in collapsible folders, and drag workspaces between folders.

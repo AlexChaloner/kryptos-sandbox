@@ -1,7 +1,8 @@
 import {
   KRYPTOS_ALPHABET, NORMAL_ALPHABET, K1_CIPHERTEXT, K2_CIPHERTEXT, K3_CIPHERTEXT, K4_CIPHERTEXT, GRID_OPERATIONS,
+  K1_PLAINTEXT, K2_PLAINTEXT, K3_PLAINTEXT,
   cleanText, cleanUnique, positionalK4Cribs, randomEnglishBookSample, combineCipherLetters, combineCipherText,
-} from "./modules/cipher.js";
+} from "./modules/cipher.js?v=2";
 import {
   letterCounts, indexOfCoincidence, frequencySimilarity, estimateNulls, formatPercent,
   scanVigenerePeriods, suggestVigenereKey, decryptVigenere, coincidenceSignificance, formatPValue,
@@ -26,6 +27,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
   let strideScanToken = 0;
   let strideScanTimer = null;
   let strideLastSignature = "";
+  const STARTER_LIBRARY_VERSION = 1;
 
   const state = {
     grids: [],
@@ -110,12 +112,12 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     });
   }
 
-  function toast(message) {
+  function toast(message, duration = 1900) {
     const element = $("#toast");
     element.textContent = message;
     element.classList.add("visible");
     clearTimeout(toast.timer);
-    toast.timer = setTimeout(() => element.classList.remove("visible"), 1900);
+    toast.timer = setTimeout(() => element.classList.remove("visible"), duration);
   }
 
   function captureSnapshot() {
@@ -215,6 +217,79 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     return document;
   }
 
+  function starterGrid(name, text, columns, y, z) {
+    const grid = {
+      id: uniqueId("starter-grid"), name, text, cols: columns, cellSize: 28,
+      x: 38, y, width: 330, height: 220, selected: [], z,
+    };
+    fitGridCardToContent(grid);
+    return grid;
+  }
+
+  function starterSolutionWorkspace(folderId, section, ciphertext, plaintext, columns, method) {
+    const name = `${section} solution · ${method}`;
+    const ciphertextGrid = starterGrid(`${section} ciphertext`, ciphertext, columns, 42, 1);
+    const plaintextGrid = starterGrid(`${section} plaintext · ${method}`, plaintext, columns, ciphertextGrid.y + ciphertextGrid.height + 40, 2);
+    const document = emptyWorkspaceDocument(name);
+    document.grids = [ciphertextGrid, plaintextGrid];
+    document.overlays = [];
+    document.selectedGridId = ciphertextGrid.id;
+    document.selectedGridIds = [ciphertextGrid.id];
+    document.z = 2;
+    return {
+      id: uniqueId("workspace"), folderId, name, document, history: [], future: [],
+      starterId: `${section.toLowerCase()}-solution`,
+    };
+  }
+
+  function serializeWorkspaceLibrary() {
+    return {
+      folders: state.folders,
+      workspaces: state.workspaces,
+      activeWorkspaceId: state.activeWorkspaceId,
+      activeFolderId: state.activeFolderId,
+      starterVersion: STARTER_LIBRARY_VERSION,
+    };
+  }
+
+  function upgradeWorkspaceLibrary(library) {
+    if ((library.starterVersion || 0) >= STARTER_LIBRARY_VERSION) return library;
+    library.folders ||= [];
+    library.workspaces ||= [];
+
+    const emptyPlaceholderNames = new Set(["K3 Reconstruction", "Berlin clock notes", "Vigenère experiments"]);
+    library.workspaces = library.workspaces.filter(entry => {
+      if (!emptyPlaceholderNames.has(entry.name)) return true;
+      return Boolean(entry.document?.grids?.length || entry.document?.overlays?.length || entry.history?.length || entry.future?.length);
+    });
+
+    const usedFolderIds = new Set(library.workspaces.map(entry => entry.folderId));
+    library.folders = library.folders.filter(folder => !["folder-classical", "folder-archive"].includes(folder.id) || usedFolderIds.has(folder.id));
+    let solvedFolder = library.folders.find(folder => folder.id === "folder-solved");
+    if (!solvedFolder) {
+      solvedFolder = { id: "folder-solved", name: "Solved sections", open: true };
+      library.folders.push(solvedFolder);
+    }
+
+    const starters = [
+      ["K1", K1_CIPHERTEXT, K1_PLAINTEXT, 21, "PALIMPSEST"],
+      ["K2", K2_CIPHERTEXT, K2_PLAINTEXT, 31, "ABSCISSA"],
+      ["K3", K3_CIPHERTEXT, K3_PLAINTEXT, 21, "double rotation"],
+    ];
+    starters.forEach(specification => {
+      const starterId = `${specification[0].toLowerCase()}-solution`;
+      if (!library.workspaces.some(entry => entry.starterId === starterId || entry.name.startsWith(`${specification[0]} solution`))) {
+        library.workspaces.push(starterSolutionWorkspace(solvedFolder.id, ...specification));
+      }
+    });
+
+    if (!library.workspaces.some(entry => entry.id === library.activeWorkspaceId)) library.activeWorkspaceId = library.workspaces[0]?.id || null;
+    const active = library.workspaces.find(entry => entry.id === library.activeWorkspaceId);
+    if (active && !library.folders.some(folder => folder.id === library.activeFolderId)) library.activeFolderId = active.folderId;
+    library.starterVersion = STARTER_LIBRARY_VERSION;
+    return library;
+  }
+
   function saveActiveWorkspaceState() {
     if (!state.activeWorkspaceId) return;
     const workspaceEntry = state.workspaces.find(item => item.id === state.activeWorkspaceId);
@@ -227,18 +302,17 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
 
   function initializeWorkspaceLibrary() {
     state.folders = [
-      { id: "folder-kryptos", name: "Kryptos", open: true },
-      { id: "folder-classical", name: "Classical ciphers", open: true },
-      { id: "folder-archive", name: "Archive", open: false },
+      { id: "folder-k4", name: "K4 experiments", open: true },
+      { id: "folder-solved", name: "Solved sections", open: true },
     ];
     const activeId = uniqueId("workspace");
     state.activeWorkspaceId = activeId;
-    state.activeFolderId = "folder-kryptos";
+    state.activeFolderId = "folder-k4";
     state.workspaces = [
-      { id: activeId, folderId: "folder-kryptos", name: $("#workspaceTitle").textContent, document: cloneSerializable(captureSnapshot()), history: [], future: [] },
-      { id: uniqueId("workspace"), folderId: "folder-kryptos", name: "K3 Reconstruction", document: emptyWorkspaceDocument("K3 Reconstruction"), history: [], future: [] },
-      { id: uniqueId("workspace"), folderId: "folder-kryptos", name: "Berlin clock notes", document: emptyWorkspaceDocument("Berlin clock notes"), history: [], future: [] },
-      { id: uniqueId("workspace"), folderId: "folder-kryptos", name: "Vigenère experiments", document: emptyWorkspaceDocument("Vigenère experiments"), history: [], future: [] },
+      { id: activeId, folderId: "folder-k4", name: $("#workspaceTitle").textContent, document: cloneSerializable(captureSnapshot()), history: [], future: [] },
+      starterSolutionWorkspace("folder-solved", "K1", K1_CIPHERTEXT, K1_PLAINTEXT, 21, "PALIMPSEST"),
+      starterSolutionWorkspace("folder-solved", "K2", K2_CIPHERTEXT, K2_PLAINTEXT, 31, "ABSCISSA"),
+      starterSolutionWorkspace("folder-solved", "K3", K3_CIPHERTEXT, K3_PLAINTEXT, 21, "double rotation"),
     ];
     renderWorkspaceTree();
     scheduleLibraryPersistence();
@@ -314,8 +388,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     clearTimeout(librarySaveTimer);
     librarySaveTimer = setTimeout(() => {
       saveActiveWorkspaceState();
-      const library = { folders: state.folders, workspaces: state.workspaces, activeWorkspaceId: state.activeWorkspaceId, activeFolderId: state.activeFolderId };
-      localStorage.setItem("kryptos-workspace-library", JSON.stringify(library));
+      localStorage.setItem("kryptos-workspace-library", JSON.stringify(serializeWorkspaceLibrary()));
     }, 120);
   }
 
@@ -323,7 +396,9 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     try {
       const raw = localStorage.getItem("kryptos-workspace-library");
       if (!raw) return false;
-      const library = JSON.parse(raw);
+      const parsedLibrary = JSON.parse(raw);
+      const needsUpgrade = (parsedLibrary.starterVersion || 0) < STARTER_LIBRARY_VERSION;
+      const library = upgradeWorkspaceLibrary(parsedLibrary);
       if (!library.folders?.length || !library.workspaces?.length) return false;
       state.folders = library.folders;
       state.workspaces = library.workspaces;
@@ -335,6 +410,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       state.future = active.future || [];
       restoreSnapshot(active.document);
       renderWorkspaceTree();
+      if (needsUpgrade) localStorage.setItem("kryptos-workspace-library", JSON.stringify(serializeWorkspaceLibrary()));
       return true;
     } catch { return false; }
   }
@@ -1472,16 +1548,6 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     commitHistory(before, "rename grid");
   }
 
-  function saveSnapshot() {
-    saveActiveWorkspaceState();
-    const snapshot = captureSnapshot();
-    localStorage.setItem("kryptos-sandbox-snapshot", JSON.stringify(snapshot));
-    const library = { folders: state.folders, workspaces: state.workspaces, activeWorkspaceId: state.activeWorkspaceId, activeFolderId: state.activeFolderId };
-    localStorage.setItem("kryptos-workspace-library", JSON.stringify(library));
-    toast("Workspace snapshot saved locally");
-    setStatus("All changes saved");
-  }
-
   function loadSnapshot() {
     try {
       const raw = localStorage.getItem("kryptos-sandbox-snapshot");
@@ -1516,7 +1582,6 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     $("#rotateLeft").addEventListener("click", () => transformGrid("left"));
     $("#rotateRight").addEventListener("click", () => transformGrid("right"));
     $("#transpose").addEventListener("click", () => transformGrid("transpose"));
-    $("#saveButton").addEventListener("click", saveSnapshot);
 
     $$(".tool-button[data-mode]").forEach(button => button.addEventListener("click", () => {
       state.tool = button.dataset.mode;
@@ -1524,6 +1589,16 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       workspace.classList.toggle("panning", state.tool === "pan");
       setStatus(`${button.textContent.trim()} tool active`);
     }));
+    $$(".collapse").forEach(button => button.addEventListener("click", () => {
+      const section = button.closest(".inspector-section");
+      if (!section) return;
+      const collapsed = section.classList.toggle("collapsed");
+      const sectionName = $(".section-title > span", section)?.textContent.toLowerCase() || "inspector";
+      button.textContent = collapsed ? "⌄" : "⌃";
+      button.setAttribute("aria-expanded", String(!collapsed));
+      button.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} ${sectionName} section`);
+    }));
+    $$(".info-button").forEach(button => button.addEventListener("click", () => toast(button.dataset.info, 4500)));
 
     let panStart = null;
     workspace.addEventListener("pointerdown", event => {
@@ -1913,7 +1988,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
             current: captureSnapshot(),
             history: state.history,
             future: state.future,
-            library: { folders: state.folders, workspaces: state.workspaces, activeWorkspaceId: state.activeWorkspaceId, activeFolderId: state.activeFolderId },
+            library: serializeWorkspaceLibrary(),
           }));
           location.reload();
         }
