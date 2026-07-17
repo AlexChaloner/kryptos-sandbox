@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=2" />
   </head>
   <body>
     <div class="app-shell">
@@ -33,7 +33,7 @@
         <div class="top-actions">
           <button class="button ghost" id="saveButton"><span>⌘</span> Save snapshot</button>
           <button class="icon-button" id="helpButton" aria-label="Keyboard help">?</button>
-          <div class="avatar">KM</div>
+          <button class="avatar" id="aboutButton" type="button" aria-label="About Alex" aria-haspopup="dialog" aria-controls="aboutModal">AC</button>
         </div>
       </header>
 
@@ -282,6 +282,18 @@
         </div>
       </div>
     </div>
-    <script type="module" src="app.js?v=3"></script>
+    <div class="modal-backdrop hidden" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+      <div class="modal about-modal">
+        <div class="modal-head">
+          <div><span class="eyebrow">ABOUT THE MAKER</span><h2 id="aboutTitle">Hi, I'm Alex.</h2></div>
+          <button id="closeAbout" type="button" aria-label="Close about dialog">×</button>
+        </div>
+        <div class="about-body">
+          <p>I made this for fun—and because I found pen and paper too slow for all the K4 experiments I wanted to do.</p>
+          <a class="about-link" href="https://alexchaloner.github.io/" target="_blank" rel="noopener noreferrer">Visit my main site <span aria-hidden="true">↗</span></a>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="app.js?v=4"></script>
   </body>
 </html>

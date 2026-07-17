@@ -1744,6 +1744,20 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     $("#helpButton").addEventListener("click", () => $("#helpModal").classList.remove("hidden"));
     $("#closeHelp").addEventListener("click", () => $("#helpModal").classList.add("hidden"));
     $("#helpModal").addEventListener("click", event => { if (event.target.id === "helpModal") event.currentTarget.classList.add("hidden"); });
+    $("#aboutButton").addEventListener("click", () => {
+      $("#aboutModal").classList.remove("hidden");
+      $("#closeAbout").focus();
+    });
+    $("#closeAbout").addEventListener("click", () => {
+      $("#aboutModal").classList.add("hidden");
+      $("#aboutButton").focus();
+    });
+    $("#aboutModal").addEventListener("click", event => {
+      if (event.target.id === "aboutModal") {
+        event.currentTarget.classList.add("hidden");
+        $("#aboutButton").focus();
+      }
+    });
 
     $("#workspaceTree").addEventListener("click", event => {
       const folderRow = event.target.closest(".tree-row.folder");
@@ -1860,7 +1874,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       }
       if (event.key.toLowerCase() === "v") $(".tool-button[data-mode='select']").click();
       if (event.key.toLowerCase() === "h") $(".tool-button[data-mode='pan']").click();
-      if (event.key === "Escape") { closeCloneExtend(); const grid = currentGrid(); if (grid?.selected.size) { const before = captureSnapshot(); grid.selected.clear(); synchronizeSelection(grid); state.analysisFullGrid = true; renderAll(); commitHistory(before, "clear selection"); } $("#helpModal").classList.add("hidden"); }
+      if (event.key === "Escape") { closeCloneExtend(); const grid = currentGrid(); if (grid?.selected.size) { const before = captureSnapshot(); grid.selected.clear(); synchronizeSelection(grid); state.analysisFullGrid = true; renderAll(); commitHistory(before, "clear selection"); } $("#helpModal").classList.add("hidden"); $("#aboutModal").classList.add("hidden"); }
     });
     document.addEventListener("copy", event => {
       if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName) && document.activeElement.selectionStart !== document.activeElement.selectionEnd) return;

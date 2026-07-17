@@ -71,7 +71,8 @@ button { cursor: pointer; }
 .icon-button:hover { color: var(--text); border-color: #55554d; }
 .icon-button.small { width: 26px; height: 26px; }
 .menu-button { display: none; }
-.avatar { width: 32px; height: 32px; display: grid; place-items: center; background: #3c3224; border: 1px solid #72572f; color: var(--amber-bright); border-radius: 50%; font-size: 10px; font-weight: 700; }
+.avatar { width: 32px; height: 32px; padding: 0; display: grid; place-items: center; background: #3c3224; border: 1px solid #72572f; color: var(--amber-bright); border-radius: 50%; font-size: 10px; font-weight: 700; transition: background .15s, border-color .15s, transform .15s; }
+.avatar:hover, .avatar:focus-visible { background: #4a3c29; border-color: var(--amber); outline: none; transform: translateY(-1px); }
 
 .main-layout { height: calc(100vh - var(--topbar)); display: grid; grid-template-columns: var(--sidebar-left) minmax(470px, 1fr) var(--sidebar-right); }
 .sidebar { min-height: 0; background: var(--panel); display: flex; flex-direction: column; }
@@ -359,8 +360,14 @@ input:disabled, textarea:disabled { opacity: .45; cursor: not-allowed; }
 .modal-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px; border-bottom: 1px solid var(--line); }
 .modal h2 { font-size: 16px; margin: 0; }
 .modal-head button { border: 0; background: none; color: var(--muted); font-size: 21px; }
+.modal-head button:hover, .modal-head button:focus-visible { color: var(--amber-bright); outline: none; }
 .shortcut-grid { padding: 18px 20px 22px; display: grid; grid-template-columns: 108px 1fr; gap: 13px 18px; align-items: center; color: var(--muted); font-size: 11px; }
 .shortcut-grid kbd { width: fit-content; }
+.about-modal { width: min(430px, calc(100vw - 36px)); }
+.about-body { padding: 21px 20px 23px; }
+.about-body p { margin: 0 0 20px; color: #b8b7ad; font-size: 13px; line-height: 1.7; }
+.about-link { width: fit-content; display: inline-flex; align-items: center; gap: 7px; border: 1px solid #72572f; border-radius: 4px; padding: 9px 12px; background: var(--amber-dim); color: var(--amber-bright); font-size: 11px; font-weight: 600; text-decoration: none; }
+.about-link:hover, .about-link:focus-visible { border-color: var(--amber); background: #3c3020; outline: none; }
 
 @media (max-width: 1200px) {
   :root { --sidebar-left: 228px; --sidebar-right: 308px; }
