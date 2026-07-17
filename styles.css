@@ -365,7 +365,10 @@ input:disabled, textarea:disabled { opacity: .45; cursor: not-allowed; }
 .shortcut-grid kbd { width: fit-content; }
 .about-modal { width: min(430px, calc(100vw - 36px)); }
 .about-body { padding: 21px 20px 23px; }
-.about-body p { margin: 0 0 20px; color: #b8b7ad; font-size: 13px; line-height: 1.7; }
+.about-body p { margin: 0 0 12px; color: #b8b7ad; font-size: 13px; line-height: 1.7; }
+.about-body p:last-of-type { margin-bottom: 20px; }
+.about-body p a { color: var(--amber-bright); text-underline-offset: 3px; }
+.about-body p a:hover, .about-body p a:focus-visible { color: #ffe0a6; outline: none; }
 .about-link { width: fit-content; display: inline-flex; align-items: center; gap: 7px; border: 1px solid #72572f; border-radius: 4px; padding: 9px 12px; background: var(--amber-dim); color: var(--amber-bright); font-size: 11px; font-weight: 600; text-decoration: none; }
 .about-link:hover, .about-link:focus-visible { border-color: var(--amber); background: #3c3020; outline: none; }
 
