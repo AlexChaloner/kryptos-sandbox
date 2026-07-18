@@ -35,3 +35,14 @@ test("analysis sidebar exposes physical-line diagnostics and shape-aware routes"
   assert.match(app, /scanGridRoutes\(grid\.text, grid\.cols\)/);
   assert.match(app, /grid\.selected = new Set\(candidate\.indices\)/);
 });
+
+test("approved canvas hotkeys are scoped and documented", () => {
+  assert.match(app, /command && event\.key\.toLowerCase\(\) === "a"/);
+  assert.match(app, /selectAllGridCells\(\)/);
+  assert.match(app, /nudgeCurrentGrid\(event\.key, event\.shiftKey \? 5 : 1\)/);
+  assert.match(app, /\(grid\.cellSize \+ 2\) \* state\.zoom \* multiplier/);
+  assert.match(app, /if \(event\.key === "Escape"\)/);
+  assert.match(app, /document\.activeElement\.matches\("input, textarea, select, button, a, \[contenteditable='true'\]"\)/);
+  assert.match(html, /⌘\/Ctrl \+ A/);
+  assert.match(html, /Shift \+ Arrow/);
+});

@@ -1770,6 +1770,60 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
     updateStatus();
   }
 
+  function clearAllCellSelections() {
+    if (!state.grids.some(grid => grid.selected.size)) return false;
+    const before = captureSnapshot();
+    state.grids.forEach(grid => grid.selected.clear());
+    state.analysisFullGrid = true;
+    renderAll();
+    commitHistory(before, "clear cell selections");
+    setStatus("Cell selections cleared");
+    return true;
+  }
+
+  function selectAllGridCells() {
+    const grid = currentGrid();
+    if (!grid) return false;
+    const indices = [...grid.text]
+      .map((letter, index) => letter === " " ? null : index)
+      .filter(index => index !== null);
+    if (!indices.length) return false;
+    const before = captureSnapshot();
+    grid.selected = new Set(indices);
+    grid.selectionOrientation = "horizontal";
+    synchronizeSelection(grid);
+    state.analysisFullGrid = false;
+    renderAll();
+    commitHistory(before, `select all cells in ${grid.name}`);
+    setStatus(`Selected all ${indices.length} cells in ${grid.name}`);
+    return true;
+  }
+
+  function nudgeCurrentGrid(key, multiplier = 1) {
+    const grid = currentGrid();
+    if (!grid) return false;
+    const directions = {
+      ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
+    };
+    const direction = directions[key];
+    if (!direction) return false;
+    const stride = (grid.cellSize + 2) * state.zoom * multiplier;
+    const nextX = Math.max(0, Math.round((grid.x + direction[0] * stride) * 100) / 100);
+    const nextY = Math.max(0, Math.round((grid.y + direction[1] * stride) * 100) / 100);
+    if (nextX === grid.x && nextY === grid.y) {
+      setStatus(`${grid.name} is at the canvas edge`);
+      return true;
+    }
+    const before = captureSnapshot();
+    grid.x = nextX;
+    grid.y = nextY;
+    state.overlays = removeOverlayLinksForGrid(state.overlays, grid.id);
+    renderAll();
+    commitHistory(before, `nudge ${grid.name} ${multiplier} cell${multiplier === 1 ? "" : "s"}`);
+    setStatus(`Moved ${grid.name} ${multiplier} cell${multiplier === 1 ? "" : "s"}`);
+    return true;
+  }
+
   function applyZoom() {
     $$(".grid-card", workspace).forEach(card => card.style.transform = `scale(${state.zoom})`);
     $("#zoomLabel").textContent = `${Math.round(state.zoom * 100)}%`;
@@ -2435,7 +2489,26 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
       const command = event.ctrlKey || event.metaKey;
       if (command && event.key.toLowerCase() === "z") { event.preventDefault(); event.shiftKey ? redo() : undo(); return; }
       if (command && event.key.toLowerCase() === "y") { event.preventDefault(); redo(); return; }
-      if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
+      if (event.key === "Escape") {
+        if (!$("#contextMenu").classList.contains("hidden")) { event.preventDefault(); closeContextMenu(); return; }
+        if (!$("#libraryEditor").classList.contains("hidden")) { event.preventDefault(); closeLibraryEditor(); return; }
+        if (!$("#helpModal").classList.contains("hidden")) { event.preventDefault(); $("#closeHelp").click(); return; }
+        if (!$("#aboutModal").classList.contains("hidden")) { event.preventDefault(); $("#closeAbout").click(); return; }
+        if (!$("#cloneExtendPopover").classList.contains("hidden")) { event.preventDefault(); closeCloneExtend(); return; }
+      }
+      if (document.activeElement.matches("input, textarea, select, button, a, [contenteditable='true']")) return;
+      if (event.key === "Escape") {
+        if (clearAllCellSelections()) event.preventDefault();
+        return;
+      }
+      if (command && event.key.toLowerCase() === "a") {
+        if (selectAllGridCells()) event.preventDefault();
+        return;
+      }
+      if (!command && !event.altKey && event.key.startsWith("Arrow")) {
+        if (nudgeCurrentGrid(event.key, event.shiftKey ? 5 : 1)) event.preventDefault();
+        return;
+      }
       if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
         if (!deleteSelectedLetters()) deleteGrid();
@@ -2449,7 +2522,6 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
       }
       if (event.key.toLowerCase() === "v") $(".tool-button[data-mode='select']").click();
       if (event.key.toLowerCase() === "h") $(".tool-button[data-mode='pan']").click();
-      if (event.key === "Escape") { closeCloneExtend(); const grid = currentGrid(); if (grid?.selected.size) { const before = captureSnapshot(); grid.selected.clear(); synchronizeSelection(grid); state.analysisFullGrid = true; renderAll(); commitHistory(before, "clear selection"); } $("#helpModal").classList.add("hidden"); $("#aboutModal").classList.add("hidden"); }
     });
     document.addEventListener("copy", event => {
       if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName) && document.activeElement.selectionStart !== document.activeElement.selectionEnd) return;
