@@ -206,6 +206,7 @@ kbd { font: 9px "DM Mono", monospace; color: #bab9ae; border: 1px solid #4a4a44;
 .letter-cell.live-overlay { color: transparent; border-color: #b99b62; background: linear-gradient(135deg, #5d4828 0 48%, #29424b 52% 100%); box-shadow: 0 0 10px rgba(227,170,77,.22); }
 .letter-cell.live-overlay::after { content: attr(data-live-letter); position: absolute; inset: 0; display: grid; place-items: center; color: #fff1cf; font: 500 14px "DM Mono", monospace; }
 .letter-cell.live-overlay::before { content: attr(data-live-formula); position: absolute; left: 2px; top: 1px; color: #cfae70; font: 5px "DM Mono", monospace; z-index: 1; }
+.letter-cell.live-overlay.selected { border-color: #ffe0a0; box-shadow: inset 0 0 0 2px #f4c46e, 0 0 10px rgba(227,170,77,.28); }
 .letter-cell .cell-index { position: absolute; right: 2px; bottom: 1px; color: #c09552; font-size: 7px; font-weight: 500; }
 .combine-flash { animation: combineFlash .7s ease-out; }
 @keyframes combineFlash { 0% { box-shadow: 0 0 0 4px rgba(244,196,110,.7), 0 0 50px rgba(227,170,77,.45); } 100% { box-shadow: 0 12px 34px rgba(0,0,0,.28); } }
@@ -279,6 +280,8 @@ input:disabled, textarea:disabled { opacity: .45; cursor: not-allowed; }
 .operation-button { width: 100%; height: 34px; border: 1px solid #9b7538; background: #604923; color: #ffe0a6; border-radius: 3px; font-size: 11px; }
 .operation-button:hover { background: #674e29; }
 .operation-button:disabled { opacity: .35; cursor: default; }
+.secondary-operation-button { margin-top: 7px; border-color: #55554d; background: #292925; color: #d7d4c8; }
+.secondary-operation-button:hover { background: #33332e; }
 
 .analysis-hero { padding: 17px 16px 14px; border-bottom: 1px solid var(--line); background: #1c1c19; }
 .selection-sequence { min-height: 36px; max-height: 68px; overflow: hidden; color: var(--amber-bright); font: 11px/1.55 "DM Mono", monospace; letter-spacing: 1px; word-break: break-all; }

@@ -14,8 +14,10 @@ import {
 } from "../modules/cipher.js";
 import {
   alignmentFromCellGeometry,
+  compactSparseLayout,
   createOverlayLink,
   findOverlayLink,
+  materializedOverlayLayout,
   normalizeOverlayLink,
   overlayPosition,
   removeCyclicOverlayLinks,
@@ -43,6 +45,7 @@ function oracle(base, overlay, rowOffset, columnOffset, operation, alphabet) {
   const baseRows = Math.ceil(base.text.length / base.cols);
   const matches = [];
   let compactText = "";
+  const text = Array(overlay.text.length).fill(" ");
   for (let overlayIndex = 0; overlayIndex < overlay.text.length; overlayIndex++) {
     const baseRow = Math.floor(overlayIndex / overlay.cols) + rowOffset;
     const baseColumn = overlayIndex % overlay.cols + columnOffset;
@@ -50,9 +53,10 @@ function oracle(base, overlay, rowOffset, columnOffset, operation, alphabet) {
     if (baseRow < 0 || baseRow >= baseRows || baseColumn < 0 || baseColumn >= base.cols || baseIndex < 0 || baseIndex >= base.text.length) continue;
     const result = combineCipherLetters(overlay.text[overlayIndex], base.text[baseIndex], operation, alphabet);
     matches.push({ topIndex: overlayIndex, baseIndex, result });
+    text[overlayIndex] = result;
     if (result !== " ") compactText += result;
   }
-  return { matches, compactText };
+  return { matches, compactText, text: text.join("") };
 }
 
 test("legacy links migrate to an explicit, stable A/B order", () => {
@@ -108,6 +112,7 @@ test("all operations match an independent row/column oracle at positive and nega
     for (const operation of Object.keys(GRID_OPERATIONS)) {
       const resolved = resolveOverlayLink(link({ rowOffset, columnOffset, operation }), grids, NORMAL_ALPHABET);
       const expected = oracle(base, overlay, rowOffset, columnOffset, operation, NORMAL_ALPHABET);
+      assert.equal(resolved.combined.text, expected.text, `sparse layout for ${operation} at ${rowOffset},${columnOffset}`);
       assert.equal(resolved.combined.compactText, expected.compactText, `${operation} at ${rowOffset},${columnOffset}`);
       assert.deepEqual(
         resolved.combined.matches.map(({ topIndex, baseIndex, result }) => ({ topIndex, baseIndex, result })),
@@ -125,27 +130,53 @@ test("partial final rows never wrap into a nonexistent neighbouring cell", () =>
   assert.deepEqual(resolved.combined.matches.map(match => match.baseIndex), [1, 2, 4, 5]);
 });
 
-test("sparse padding participates in alignment but never becomes a materialized blank cell", () => {
+test("sparse padding and non-overlap remain holes in the live materialized layout", () => {
   const base = grid("base", "AB CDE F", 3);
   const overlay = grid("overlay", "Z YX WVU", 3);
   const resolved = resolveOverlayLink(link(), [base, overlay], NORMAL_ALPHABET);
   assert.equal(resolved.combined.alignedCount, 8);
   assert.equal(resolved.combined.combinedCount, 4);
+  assert.equal(resolved.combined.text, "Z  Z A Z");
+  assert.equal(resolved.combined.columns, 3);
   assert.equal(resolved.combined.compactText.includes(" "), false);
   assert.equal(resolved.combined.matches.filter(match => match.result !== " ").length, 4);
 });
 
-test("the complete 33-column and 32-column Kryptos plates produce a blank-free result", () => {
+test("the complete Kryptos plates retain the 33-column top-plate layout for every operation", () => {
   const base = grid("base", KRYPTOS_RIGHT_PLATE, KRYPTOS_RIGHT_PLATE_COLUMNS);
   const overlay = grid("overlay", KRYPTOS_LEFT_PLATE, KRYPTOS_LEFT_PLATE_COLUMNS);
   for (const operation of Object.keys(GRID_OPERATIONS)) {
     const resolved = resolveOverlayLink(link({ operation }), [base, overlay], KRYPTOS_ALPHABET);
     assert.equal(resolved.combined.alignedCount, 896, operation);
     assert.equal(resolved.combined.combinedCount, 860, operation);
+    assert.equal(resolved.combined.text.length, KRYPTOS_LEFT_PLATE.length, operation);
+    assert.equal([...resolved.combined.text].filter(letter => letter === " ").length, 64, operation);
+    assert.equal(resolved.combined.columns, KRYPTOS_LEFT_PLATE_COLUMNS, operation);
     assert.equal(resolved.combined.compactText.length, 860, operation);
     assert.equal(resolved.combined.compactText.includes(" "), false, operation);
     assert.equal(resolved.combined.overlapColumns, 32, operation);
   }
+});
+
+test("compacting is an explicit layout transformation with stable index mapping", () => {
+  assert.deepEqual(compactSparseLayout("A B  C", 3, 2), {
+    text: "ABC",
+    columns: 2,
+    indexMap: [0, -1, 1, -1, -1, 2],
+  });
+  const plates = compactSparseLayout("A".repeat(10) + "   " + "B".repeat(10), 33, 32);
+  assert.equal(plates.text, "A".repeat(10) + "B".repeat(10));
+  assert.equal(plates.columns, 20);
+});
+
+test("live materialization defaults to sparse and only compacts when explicitly requested", () => {
+  const resolved = resolveOverlayLink(
+    link(),
+    [grid("base", "AB CDE F", 3), grid("overlay", "Z YX WVU", 3)],
+    NORMAL_ALPHABET,
+  );
+  assert.deepEqual(materializedOverlayLayout(resolved.combined), { text: "Z  Z A Z", columns: 3 });
+  assert.deepEqual(materializedOverlayLayout(resolved.combined, true), { text: "ZZAZ", columns: 3 });
 });
 
 test("result width is recalculated if either source is reshaped", () => {
@@ -247,6 +278,7 @@ test("randomized unequal, partial, sparse grids match the independent oracle", (
     const operation = operations[random(operations.length)];
     const resolved = resolveOverlayLink(link({ rowOffset, columnOffset, operation }), [base, overlay], NORMAL_ALPHABET);
     const expected = oracle(base, overlay, rowOffset, columnOffset, operation, NORMAL_ALPHABET);
+    assert.equal(resolved.combined.text, expected.text, `layout in iteration ${iteration}`);
     assert.equal(resolved.combined.compactText, expected.compactText, `iteration ${iteration}`);
     assert.deepEqual(
       resolved.combined.matches.map(({ topIndex, baseIndex, result }) => ({ topIndex, baseIndex, result })),
@@ -266,6 +298,7 @@ test("large unequal grids match the oracle for every operation", { timeout: 5000
     const overlayLink = link({ rowOffset: -17, columnOffset: 13, operation });
     const resolved = resolveOverlayLink(overlayLink, [base, overlay], alphabet);
     const expected = oracle(base, overlay, -17, 13, operation, alphabet);
+    assert.equal(resolved.combined.text, expected.text);
     assert.equal(resolved.combined.compactText, expected.compactText);
     assert.equal(resolved.combined.matches.length, expected.matches.length);
     assert.deepEqual(resolved.combined.matches.at(-1), {

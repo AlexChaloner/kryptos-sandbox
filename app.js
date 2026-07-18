@@ -5,9 +5,9 @@ import {
   cleanText, cleanUnique, positionalK4Cribs, randomEnglishBookSample, combineAlignedCipherText, combineCipherText,
 } from "./modules/cipher.js?v=7";
 import {
-  alignmentFromCellGeometry, createOverlayLink, findOverlayLink, normalizeOverlayLinks,
-  overlayPosition, removeCyclicOverlayLinks, removeOverlayLinksForGrid, resolveOverlayLink,
-} from "./modules/overlay.js?v=1";
+  alignmentFromCellGeometry, compactSparseLayout, createOverlayLink, findOverlayLink, normalizeOverlayLinks,
+  materializedOverlayLayout, overlayPosition, removeCyclicOverlayLinks, removeOverlayLinksForGrid, resolveOverlayLink,
+} from "./modules/overlay.js?v=2";
 import {
   letterCounts, indexOfCoincidence, frequencySimilarity, estimateNulls, formatPercent,
   scanVigenerePeriods, suggestVigenereKey, decryptVigenere, coincidenceSignificance, formatPValue,
@@ -632,7 +632,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     selectGrid(grid.id, true);
     const before = captureSnapshot();
     const start = { x: event.clientX, y: event.clientY, width: grid.width, height: grid.height };
-    const compactText = grid.text.includes(" ") ? grid.text.replaceAll(" ", "") : grid.text;
+    const textLength = grid.text.length;
     let mode = null;
     let changed = false;
     card.classList.add("resizing");
@@ -640,8 +640,9 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
 
     const reshape = columns => {
       const nextColumns = clamp(columns, 1, 500);
-      if (nextColumns === grid.cols && grid.text === compactText) return;
-      grid.text = compactText;
+      if (nextColumns === grid.cols) return;
+      if (grid.syncSourceId) grid.syncSourceId = null;
+      if (grid.derived) grid.derived = null;
       grid.cols = nextColumns;
       grid.width = gridWidthForColumns(grid, nextColumns);
       grid.height = gridMinimumHeight(grid);
@@ -671,9 +672,9 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
         const requestedRows = clamp(
           Math.floor((targetHeight - 54 + 2) / (grid.cellSize + 2)),
           1,
-          Math.max(1, compactText.length),
+          Math.max(1, textLength),
         );
-        reshape(Math.ceil(compactText.length / requestedRows));
+        reshape(Math.ceil(textLength / requestedRows));
       }
     };
 
@@ -1001,10 +1002,10 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
   function alignedCombination(link, operation) {
     const resolved = resolveOverlayLink(link, state.grids, state.alphabet, operation);
     if (!resolved) return null;
+    const layout = materializedOverlayLayout(resolved.combined);
     return {
       ...resolved.combined,
-      text: resolved.combined.compactText,
-      columns: resolved.combined.overlapColumns,
+      ...layout,
       alignment: resolved.alignment,
       operandA: resolved.operandA,
       operandB: resolved.operandB,
@@ -1020,11 +1021,13 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       if (!base || !overlay) return;
       if (grid.derived.alignment) {
         const combined = combineAlignedCipherText(base, overlay, grid.derived.operation, state.alphabet, grid.derived.alignment);
-        grid.text = combined.compactText;
-        grid.cols = combined.overlapColumns;
+        const layout = materializedOverlayLayout(combined, grid.derived.compact);
+        grid.text = layout.text;
+        grid.cols = layout.columns;
         delete grid.derived.alignment.columns;
       } else {
-        grid.text = combinedText(base, overlay, grid.derived.operation);
+        const result = combinedText(base, overlay, grid.derived.operation);
+        grid.text = grid.derived.compact ? result.replaceAll(" ", "") : result;
         grid.cols = Math.max(1, Math.min(base.cols, overlay.cols, grid.text.length || 1));
       }
       grid.cellSize = Math.min(base.cellSize, overlay.cellSize);
@@ -1122,6 +1125,40 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     grid.height = gridMinimumHeight(grid);
   }
 
+  function compactSelectedGrid() {
+    const grid = currentGrid();
+    if (!grid) return toast("Select a grid first");
+    if (!grid.text.includes(" ")) return toast(`${grid.name} is already compact`);
+    const before = captureSnapshot();
+    let preferredColumns = grid.cols;
+    if (grid.derived?.alignment) {
+      const operandA = state.grids.find(item => item.id === grid.derived.baseId);
+      const operandB = state.grids.find(item => item.id === grid.derived.overlayId);
+      if (operandA && operandB) {
+        preferredColumns = combineAlignedCipherText(
+          operandA,
+          operandB,
+          grid.derived.operation,
+          state.alphabet,
+          grid.derived.alignment,
+        ).overlapColumns;
+      }
+    }
+    const compacted = compactSparseLayout(grid.text, grid.cols, preferredColumns);
+    grid.selected = new Set([...grid.selected].map(index => compacted.indexMap[index]).filter(index => index >= 0));
+    grid.highlights = Object.fromEntries(Object.entries(grid.highlights || {})
+      .map(([index, colour]) => [compacted.indexMap[Number(index)], colour])
+      .filter(([index]) => index >= 0));
+    if (grid.syncSourceId) grid.syncSourceId = null;
+    if (grid.derived) grid.derived.compact = true;
+    grid.text = compacted.text;
+    grid.cols = compacted.columns;
+    fitGridCardToContent(grid);
+    renderAll();
+    commitHistory(before, `compact ${grid.name}`);
+    toast(`Compacted ${grid.name} to ${grid.text.length} letters`);
+  }
+
   function combineGrids(selectedA, selectedB) {
     const alphabet = state.alphabet;
     if (alphabet.length < 2) return toast("Choose an alphabet with at least two unique symbols");
@@ -1160,7 +1197,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       y: resultPosition.y,
       width: resultWidth, height: resultHeight,
       selected: new Set(), highlights: {}, z: ++state.z,
-      derived: { baseId: operandA.id, overlayId: operandB.id, operation, alignment: combined.alignment }
+      derived: { baseId: operandA.id, overlayId: operandB.id, operation, alignment: combined.alignment, compact: false }
     };
     state.grids.push(result);
     state.selectedGridId = result.id;
@@ -1354,12 +1391,16 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     const detachedSynchronizedView = Boolean(grid.syncSourceId);
     if (detachedSynchronizedView) grid.syncSourceId = null;
     if (grid.derived) grid.derived = null;
+    const selection = new Set([...grid.selected]
+      .map(index => transformSparseIndex(index, grid.text.length, grid.cols, kind))
+      .filter(index => index >= 0));
     const transformed = transformSparseText(grid.text, grid.cols, kind);
     grid.highlights = transformHighlights(grid, transformed, kind);
     grid.text = transformed.text;
     grid.cols = transformed.columns;
     fitGridCardToContent(grid);
-    grid.selected.clear();
+    grid.selected = selection;
+    if (!detachedSynchronizedView) synchronizedGroup(grid).forEach(item => { item.selected = new Set(selection); });
     renderAll();
     const verb = kind === "transpose" ? "transpose" : kind === "mirror" ? "mirror" : kind === "reflectVertical" ? "reflect vertically" : "rotate";
     const pastTense = kind === "transpose" ? "Transposed" : kind === "mirror" ? "Mirrored" : kind === "reflectVertical" ? "Reflected vertically" : "Rotated";
@@ -1380,6 +1421,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     $("#runGridOperation").textContent = resolvedLink
       ? "Create grid from live overlay"
       : "Create live result from A and B";
+    $("#compactGrid").disabled = !grid?.text.includes(" ");
     if (grid?.derived) $("#combineOperation").value = grid.derived.operation;
     else if (resolvedLink) $("#combineOperation").value = resolvedLink.link.operation;
     const controls = [$("#gridName"), $("#gridColumns"), $("#cellSize"), $("#gridText")];
@@ -1880,6 +1922,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     $("#transpose").addEventListener("click", () => transformGrid("transpose"));
     $("#mirrorGrid").addEventListener("click", () => transformGrid("mirror"));
     $("#reflectVertical").addEventListener("click", () => transformGrid("reflectVertical"));
+    $("#compactGrid").addEventListener("click", compactSelectedGrid);
     $$(".letter-colour-button").forEach(button => button.addEventListener("click", () => colourSelectedLetters(button.dataset.letterColour)));
 
     $$(".tool-button[data-mode]").forEach(button => button.addEventListener("click", () => {
@@ -1900,22 +1943,28 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     $$(".info-button").forEach(button => button.addEventListener("click", () => toast(button.dataset.info, 4500)));
 
     let panStart = null;
+    const pointerHitsWorkspaceScrollbar = event => {
+      const bounds = workspace.getBoundingClientRect();
+      const verticalWidth = workspace.offsetWidth - workspace.clientWidth;
+      const horizontalHeight = workspace.offsetHeight - workspace.clientHeight;
+      return (verticalWidth > 0 && event.clientX >= bounds.right - verticalWidth)
+        || (horizontalHeight > 0 && event.clientY >= bounds.bottom - horizontalHeight);
+    };
     workspace.addEventListener("pointerdown", event => {
       if (event.target.closest(".grid-card")) return;
+      if (pointerHitsWorkspaceScrollbar(event)) return;
       if (state.tool === "pan") {
         panStart = { x: event.clientX, y: event.clientY, left: workspace.scrollLeft, top: workspace.scrollTop };
         workspace.classList.add("active-pan");
         return;
       }
-      if (event.button === 0 && (state.selectedGridId || state.grids.some(grid => grid.selected.size))) {
+      if (event.button === 0 && state.selectedGridId) {
         const before = captureSnapshot();
-        state.grids.forEach(grid => grid.selected.clear());
         state.selectedGridId = null;
         state.selectedGridIds = [];
-        state.analysisFullGrid = true;
         renderAll();
-        commitHistory(before, "deselect workspace");
-        setStatus("Selection cleared");
+        commitHistory(before, "clear grid focus");
+        setStatus("Grid focus cleared · cell selections preserved");
       }
     });
     workspace.addEventListener("dblclick", event => {
@@ -1979,14 +2028,13 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
         { icon: "K4", label: "Import K4 ciphertext", action: () => addGrid(K4_CIPHERTEXT, "K4 ciphertext", { x, y, cols: 14, width: 445, height: 280 }) },
         { icon: "?", label: "Import positional cribs", action: () => addGrid(positionalK4Cribs(), "K4 positional crib mask", { x, y, cols: 14, width: 445, height: 280, preserveSparse: true }) },
         { separator: true },
-        { icon: "○", label: "Clear selection", action: () => {
-          if (!state.selectedGridIds.length) return;
+        { icon: "○", label: "Clear all cell selections", action: () => {
+          if (!state.grids.some(grid => grid.selected.size)) return;
           const before = captureSnapshot();
           state.grids.forEach(grid => grid.selected.clear());
-          state.selectedGridId = null;
-          state.selectedGridIds = [];
+          state.analysisFullGrid = true;
           renderAll();
-          commitHistory(before, "deselect workspace");
+          commitHistory(before, "clear all cell selections");
         } },
       ], event.clientX, event.clientY);
     });
@@ -2007,7 +2055,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
         event.target.blur();
       }
     });
-    $("#gridColumns").addEventListener("change", event => { const grid = currentGrid(); if (grid) { const before = captureSnapshot(); grid.derived = null; if (grid.text.includes(" ")) grid.text = grid.text.replaceAll(" ", ""); grid.cols = clamp(Number(event.target.value) || 1, 1, 500); fitGridCardToContent(grid); grid.selected.clear(); renderAll(); commitHistory(before, `reshape ${grid.name}`); } });
+    $("#gridColumns").addEventListener("change", event => { const grid = currentGrid(); if (grid) { const before = captureSnapshot(); grid.derived = null; if (grid.syncSourceId) grid.syncSourceId = null; grid.cols = clamp(Number(event.target.value) || 1, 1, 500); fitGridCardToContent(grid); renderAll(); commitHistory(before, `reshape ${grid.name}`); } });
     $("#cellSize").addEventListener("change", event => { const grid = currentGrid(); if (grid) { const before = captureSnapshot(); state.cellSize = clamp(Number(event.target.value) || 28, 20, 64); state.grids.forEach(item => { item.cellSize = state.cellSize; fitGridCardToContent(item); }); renderAll(); commitHistory(before, "resize workspace cells"); } });
     $("#applyText").addEventListener("click", () => {
       const grid = currentGrid();

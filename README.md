@@ -17,12 +17,14 @@ The development server disables caching and enables automatic source-file reload
 - Double-click empty canvas space to create a new grid at that position.
 - Resizing a card horizontally automatically reflows its letters and updates its row/column dimensions while preserving the full text.
 - Drag across cells for a continuous row-major selection; hold `Ctrl`/`Cmd` to add a rectangular region, or Ctrl/Cmd-click to add individual cells.
+- Keep cell selections through grid movement, panning, scrolling, zooming, canvas focus changes, reshaping, and matrix transforms; clear them only with an explicit selection action or a content-replacing edit.
 - Type with cells selected to overwrite them one-by-one from left to right, top to bottom.
 - Copy a whole grid as row-preserving plain text, copy a cell selection in its traversal order, and paste directly into a selected grid or cell range.
 - Paste plain text onto an unselected board to create a content-fitted grid, preserving rectangular line widths or choosing a balanced layout automatically.
 - Rotate, transpose, reflect left-to-right or top-to-bottom, duplicate, delete, paste into, and copy from grids.
 - Colour selected letters amber, blue, coral, or green, clear colours independently, and preserve annotations through saves, edits, duplication, and matrix transforms.
-- Preview Vigenère results directly on intersecting cells while dragging, then create the exact live letter sequence with one click as a compact, blank-free result linked to both source grids.
+- Preview Vigenère results directly on intersecting cells while dragging, then create the exact live grid with one click, preserving its columns, offsets, and empty cells.
+- Compact any selected sparse grid explicitly from Grid operations; live-derived grids remain linked while displaying their blank-free representation.
 - Switch between the Kryptos keyed alphabet, A–Z, or a custom alphabet.
 - Analyse a selection or full grid using frequency similarity, index of coincidence, bigrams, and simulated uniform-random null likelihoods.
 - Scan candidate Vigenère key lengths using average vertical-column IC with exact uniform-null standard errors, sample-size-adjusted z-scores, approximate p-values, and 95% null bands; inspect each column, infer frequency-based key letters under the active alphabet, and preview candidate decryptions.
@@ -46,4 +48,4 @@ When served over localhost, it checks source files for changes and reloads the p
 
 ## Tests
 
-Run `npm test` to exercise flat and aligned A+B, A−B, and B−A operations; positive and negative spatial offsets; unequal and partial rows; sparse plate padding; link persistence; zoom-aware snapping; and a large-grid stress matrix.
+Run `npm test` to exercise flat and aligned A+B, A−B, and B−A operations; exact sparse materialization and explicit compaction; positive and negative spatial offsets; unequal and partial rows; plate padding; link persistence; zoom-aware snapping; and a large-grid stress matrix.

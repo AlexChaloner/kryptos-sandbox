@@ -26,7 +26,7 @@ test("every flat combination truncates at the shorter sequence without wrapping 
   }
 });
 
-test("spaces remain positional in aligned text but are absent from compact materialization", () => {
+test("aligned output exposes both the sparse layout and an explicit compact representation", () => {
   const operandA = { text: "AB CD", cols: 3 };
   const operandB = { text: "Z YXW", cols: 3 };
   const result = combineAlignedCipherText(operandA, operandB, "add", NORMAL_ALPHABET, {

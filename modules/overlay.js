@@ -130,3 +130,25 @@ export function overlayPosition(base, link, cellSize, gap = 2, scale = 1) {
     y: base.y + normalized.rowOffset * stride,
   };
 }
+
+export function compactSparseLayout(text, columns, preferredColumns = columns) {
+  const indexMap = Array(String(text || "").length).fill(-1);
+  let compactText = "";
+  [...String(text || "")].forEach((letter, index) => {
+    if (letter === " ") return;
+    indexMap[index] = compactText.length;
+    compactText += letter;
+  });
+  const normalizedColumns = Number.isFinite(preferredColumns) ? Math.round(preferredColumns) : columns;
+  return {
+    text: compactText,
+    columns: Math.max(1, Math.min(normalizedColumns || 1, compactText.length || 1)),
+    indexMap,
+  };
+}
+
+export function materializedOverlayLayout(combined, compact = false) {
+  return compact
+    ? { text: combined.compactText, columns: combined.overlapColumns }
+    : { text: combined.text, columns: combined.columns };
+}
