@@ -22,7 +22,7 @@ The development server disables caching and enables automatic source-file reload
 - Paste plain text onto an unselected board to create a content-fitted grid, preserving rectangular line widths or choosing a balanced layout automatically.
 - Rotate, transpose, reflect left-to-right or top-to-bottom, duplicate, delete, paste into, and copy from grids.
 - Colour selected letters amber, blue, coral, or green, clear colours independently, and preserve annotations through saves, edits, duplication, and matrix transforms.
-- Preview Vigenère results directly on intersecting cells while dragging, then materialize the physically aligned letter pairs as a compact, blank-free result linked to both source grids.
+- Preview Vigenère results directly on intersecting cells while dragging, then create the exact live letter sequence with one click as a compact, blank-free result linked to both source grids.
 - Switch between the Kryptos keyed alphabet, A–Z, or a custom alphabet.
 - Analyse a selection or full grid using frequency similarity, index of coincidence, bigrams, and simulated uniform-random null likelihoods.
 - Scan candidate Vigenère key lengths using average vertical-column IC with exact uniform-null standard errors, sample-size-adjusted z-scores, approximate p-values, and 95% null bands; inspect each column, infer frequency-based key letters under the active alphabet, and preview candidate decryptions.
@@ -37,9 +37,13 @@ The development server disables caching and enables automatic source-file reload
 - Repeat a selected grid/cell sequence N times from the toolbar's inline Clone extend slider.
 - Create independent persistent workspaces, organize them in collapsible folders, and drag workspaces between folders.
 - Right-click cells, grids, the workspace canvas, folders, or workspace entries for contextual actions.
-- Select operand A followed by operand B to create live linked addition or subtraction results; positional overlays use matching A/B color labels.
+- Select operand A followed by operand B to create live linked addition or subtraction results; positional overlays keep their original A/B meaning through materialization and use matching color labels.
 - Create experimental synchronized views with independent column counts; edits and selections mirror through their canonical source until a view is transformed or deleted.
 - Sparse rotation and transposition preserve absent cells without inserting padding characters.
 
-The app has no build step. `app.js` contains browser orchestration, while `modules/` separates cipher operations, statistical analysis, sparse matrix transforms, context menus, and shared utilities.
+The app has no build step. `app.js` contains browser orchestration, while `modules/` separates cipher and overlay operations, statistical analysis, sparse matrix transforms, context menus, and shared utilities.
 When served over localhost, it checks source files for changes and reloads the page automatically during development while preserving workspace and undo history.
+
+## Tests
+
+Run `npm test` to exercise flat and aligned A+B, A−B, and B−A operations; positive and negative spatial offsets; unequal and partial rows; sparse plate padding; link persistence; zoom-aware snapping; and a large-grid stress matrix.

@@ -131,13 +131,16 @@ export function combineAlignedCipherText(operandA, operandB, operation, alphabet
   const topIsA = alignment.topOperand === "a";
   const top = topIsA ? operandA : operandB;
   const base = topIsA ? operandB : operandA;
+  const rowOffset = Number.isFinite(alignment.rowOffset) ? Math.round(alignment.rowOffset) : 0;
+  const columnOffset = Number.isFinite(alignment.columnOffset) ? Math.round(alignment.columnOffset) : 0;
   const baseRows = Math.ceil(base.text.length / base.cols);
   let text = "";
   let compactText = "";
   let alignedCount = 0;
+  const matches = [];
   for (let topIndex = 0; topIndex < top.text.length; topIndex++) {
-    const baseRow = Math.floor(topIndex / top.cols) + alignment.rowOffset;
-    const baseColumn = topIndex % top.cols + alignment.columnOffset;
+    const baseRow = Math.floor(topIndex / top.cols) + rowOffset;
+    const baseColumn = topIndex % top.cols + columnOffset;
     const baseIndex = baseRow * base.cols + baseColumn;
     if (baseRow < 0 || baseRow >= baseRows || baseColumn < 0 || baseColumn >= base.cols || baseIndex < 0 || baseIndex >= base.text.length) {
       text += " ";
@@ -149,9 +152,10 @@ export function combineAlignedCipherText(operandA, operandB, operation, alphabet
     const combined = combineCipherLetters(a, b, operation, alphabet);
     text += combined;
     if (combined !== " ") compactText += combined;
+    matches.push({ topIndex, baseIndex, a, b, result: combined });
   }
-  const firstAlignedColumn = Math.max(0, -alignment.columnOffset);
-  const lastAlignedColumn = Math.min(top.cols, base.cols - alignment.columnOffset);
+  const firstAlignedColumn = Math.max(0, -columnOffset);
+  const lastAlignedColumn = Math.min(top.cols, base.cols - columnOffset);
   const overlapColumns = Math.max(1, lastAlignedColumn - firstAlignedColumn);
-  return { text, compactText, columns: top.cols, overlapColumns, alignedCount, combinedCount: compactText.length };
+  return { text, compactText, columns: top.cols, overlapColumns, alignedCount, combinedCount: compactText.length, matches };
 }

@@ -2,8 +2,12 @@ import {
   KRYPTOS_ALPHABET, NORMAL_ALPHABET, K1_CIPHERTEXT, K2_CIPHERTEXT, K3_CIPHERTEXT, K4_CIPHERTEXT, GRID_OPERATIONS,
   K1_PLAINTEXT, K2_PLAINTEXT, K3_PLAINTEXT,
   KRYPTOS_LEFT_PLATE, KRYPTOS_LEFT_PLATE_COLUMNS, KRYPTOS_RIGHT_PLATE, KRYPTOS_RIGHT_PLATE_COLUMNS,
-  cleanText, cleanUnique, positionalK4Cribs, randomEnglishBookSample, combineAlignedCipherText, combineCipherLetters, combineCipherText,
-} from "./modules/cipher.js?v=6";
+  cleanText, cleanUnique, positionalK4Cribs, randomEnglishBookSample, combineAlignedCipherText, combineCipherText,
+} from "./modules/cipher.js?v=7";
+import {
+  alignmentFromCellGeometry, createOverlayLink, findOverlayLink, normalizeOverlayLinks,
+  overlayPosition, removeCyclicOverlayLinks, removeOverlayLinksForGrid, resolveOverlayLink,
+} from "./modules/overlay.js?v=1";
 import {
   letterCounts, indexOfCoincidence, frequencySimilarity, estimateNulls, formatPercent,
   scanVigenerePeriods, suggestVigenereKey, decryptVigenere, coincidenceSignificance, formatPValue,
@@ -138,7 +142,12 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
 
   function captureSnapshot() {
     return {
-      grids: state.grids.map(grid => ({ ...grid, derived: grid.derived ? { ...grid.derived } : null, highlights: { ...(grid.highlights || {}) }, selected: [...grid.selected] })),
+      grids: state.grids.map(grid => ({
+        ...grid,
+        derived: grid.derived ? { ...grid.derived, alignment: grid.derived.alignment ? { ...grid.derived.alignment } : null } : null,
+        highlights: { ...(grid.highlights || {}) },
+        selected: [...grid.selected],
+      })),
       overlays: state.overlays.map(overlay => ({ ...overlay })),
       selectedGridId: state.selectedGridId,
       selectedGridIds: [...state.selectedGridIds],
@@ -169,8 +178,13 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
 
   function restoreSnapshot(snapshot) {
     state.restoringHistory = true;
-    state.grids = snapshot.grids.map(grid => ({ ...grid, derived: grid.derived ? { ...grid.derived } : null, highlights: { ...(grid.highlights || {}) }, selected: new Set(grid.selected || []) }));
-    state.overlays = (snapshot.overlays || []).map(overlay => ({ ...overlay }));
+    state.grids = snapshot.grids.map(grid => ({
+      ...grid,
+      derived: grid.derived ? { ...grid.derived, alignment: grid.derived.alignment ? { ...grid.derived.alignment } : null } : null,
+      highlights: { ...(grid.highlights || {}) },
+      selected: new Set(grid.selected || []),
+    }));
+    state.overlays = normalizeOverlayLinks(snapshot.overlays);
     state.selectedGridId = snapshot.selectedGridId;
     state.selectedGridIds = snapshot.selectedGridIds || (snapshot.selectedGridId ? [snapshot.selectedGridId] : []);
     state.alphabet = snapshot.alphabet;
@@ -464,12 +478,35 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     } catch { return false; }
   }
 
+  function reconcileOverlayState() {
+    const gridsById = new Map(state.grids.map(grid => [grid.id, grid]));
+    const seenOverlayIds = new Set();
+    state.overlays = normalizeOverlayLinks(state.overlays).filter(link => {
+      if (!gridsById.has(link.baseId) || !gridsById.has(link.overlayId) || link.baseId === link.overlayId) return false;
+      if (seenOverlayIds.has(link.overlayId)) return false;
+      seenOverlayIds.add(link.overlayId);
+      return true;
+    });
+    state.overlays = removeCyclicOverlayLinks(state.overlays);
+    for (let pass = 0; pass < state.overlays.length; pass++) {
+      state.overlays.forEach(link => {
+        const base = gridsById.get(link.baseId);
+        const overlay = gridsById.get(link.overlayId);
+        if (!base || !overlay) return;
+        const position = overlayPosition(base, link, state.cellSize, 2, state.zoom);
+        overlay.x = Math.max(0, position.x);
+        overlay.y = Math.max(0, position.y);
+      });
+    }
+  }
+
   function renderAll() {
     migrateLegacyK4Imports();
     state.grids.forEach(grid => { grid.cellSize = state.cellSize; grid.highlights = normalizedHighlights(grid); });
     refreshSynchronizedViews();
     refreshDerivedGrids();
     refreshSynchronizedViews();
+    reconcileOverlayState();
     $$(".grid-card", workspace).forEach(card => card.remove());
     state.grids.forEach(renderGrid);
     updateWorkspaceExtent();
@@ -701,19 +738,19 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     state.moving = { grid, card, start };
     card.classList.add("dragging");
     card.setPointerCapture?.(event.pointerId);
+    clearLiveOverlay(card);
 
     let dragFrame = null;
     const updatePosition = (clientX, clientY, preview = true) => {
-      const scale = state.zoom;
       const scrollDeltaX = workspace.scrollLeft - start.scrollLeft;
       const scrollDeltaY = workspace.scrollTop - start.scrollTop;
-      grid.x = Math.max(0, Math.round((start.x + (clientX - start.clientX) / scale + scrollDeltaX) / 8) * 8);
-      grid.y = Math.max(0, Math.round((start.y + (clientY - start.clientY) / scale + scrollDeltaY) / 8) * 8);
+      grid.x = Math.max(0, Math.round((start.x + clientX - start.clientX + scrollDeltaX) / 8) * 8);
+      grid.y = Math.max(0, Math.round((start.y + clientY - start.clientY + scrollDeltaY) / 8) * 8);
       card.style.left = `${grid.x}px`;
       card.style.top = `${grid.y}px`;
       updateWorkspaceExtent();
       if (!preview) return;
-      const target = findOverlapTarget(grid, card, true);
+      const target = findOverlapTarget(grid, card);
       $$(".grid-card.preview-a, .grid-card.preview-b, .grid-card.drop-target", workspace).forEach(element => element.classList.remove("preview-a", "preview-b", "drop-target"));
       card.classList.add("preview-a");
       if (target) $(`.grid-card[data-id="${target.id}"]`, workspace)?.classList.add("preview-b");
@@ -744,15 +781,25 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       updatePosition(latestPointer.clientX, latestPointer.clientY, false);
       card.classList.remove("dragging");
       $$(".grid-card.preview-a, .grid-card.preview-b, .grid-card.drop-target", workspace).forEach(element => element.classList.remove("preview-a", "preview-b", "drop-target"));
-      clearLiveOverlay();
+      clearLiveOverlay(card);
+      if (endEvent?.type === "pointercancel") {
+        state.moving = null;
+        restoreSnapshot(historyBefore);
+        setStatus(`Cancelled move of ${grid.name}`);
+        return;
+      }
       const target = endEvent?.type === "pointercancel" ? null : findOverlapTarget(grid, card);
       state.moving = null;
       if (target && $("#snapCombine").checked) {
-        activateLiveOverlay(target, grid);
-        commitHistory(historyBefore, `overlay ${grid.name} on ${target.name}`);
+        if (activateLiveOverlay(target, grid)) commitHistory(historyBefore, `overlay ${grid.name} on ${target.name}`);
+        else {
+          state.overlays = removeOverlayLinksForGrid(state.overlays, grid.id);
+          renderAll();
+          commitHistory(historyBefore, `move ${grid.name}`);
+        }
       } else {
         const overlayCount = state.overlays.length;
-        state.overlays = state.overlays.filter(overlay => overlay.overlayId !== grid.id);
+        state.overlays = removeOverlayLinksForGrid(state.overlays, grid.id);
         if (overlayCount !== state.overlays.length) renderAll();
         else renderPersistentOverlays();
         commitHistory(historyBefore, `move ${grid.name}`);
@@ -765,27 +812,39 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     workspace.addEventListener("scroll", scroll, { passive: true });
   }
 
-  function findOverlapTarget(grid, card, preview = false) {
-    const a = card.getBoundingClientRect();
+  function visibleGridBounds(card) {
+    const body = $(".grid-card-body", card)?.getBoundingClientRect();
+    const letters = $(".letter-grid", card)?.getBoundingClientRect();
+    if (!body || !letters) return card.getBoundingClientRect();
+    return {
+      left: Math.max(body.left, letters.left),
+      top: Math.max(body.top, letters.top),
+      right: Math.min(body.right, letters.right),
+      bottom: Math.min(body.bottom, letters.bottom),
+    };
+  }
+
+  function findOverlapTarget(grid, card) {
+    const a = visibleGridBounds(card);
     let best = null;
     let bestArea = 0;
     state.grids.forEach(candidate => {
       if (candidate.id === grid.id) return;
       const element = $(`.grid-card[data-id="${candidate.id}"]`, workspace);
       if (!element) return;
-      const b = element.getBoundingClientRect();
+      const b = visibleGridBounds(element);
       const width = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
       const height = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
       const area = width * height;
-      const threshold = preview ? Math.min(grid.cellSize, candidate.cellSize) ** 2 * .3 : Math.min(a.width * a.height, b.width * b.height) * 0.28;
+      const threshold = Math.min(grid.cellSize, candidate.cellSize) ** 2 * .35 * state.zoom ** 2;
       if (area > threshold && area > bestArea) { best = candidate; bestArea = area; }
     });
     return best;
   }
 
-  function clearLiveOverlay() {
+  function clearLiveOverlay(scope = workspace) {
     liveOverlayPreviewSignature = "";
-    $$(".letter-cell.live-overlay", workspace).forEach(cell => {
+    $$(".letter-cell.live-overlay", scope).forEach(cell => {
       cell.classList.remove("live-overlay");
       delete cell.dataset.liveLetter;
       delete cell.dataset.liveFormula;
@@ -803,79 +862,85 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     return { compact: `A:${a}+B:${b}`, title: `A: ${a} plus B: ${b} = ${result}` };
   }
 
-  function renderLiveOverlay(base, overlay, overlayCard) {
-    if (!base) {
-      if (liveOverlayPreviewSignature) clearLiveOverlay();
-      return;
-    }
-    const baseCard = $(`.grid-card[data-id="${base.id}"]`, workspace);
-    if (!baseCard) return clearLiveOverlay();
-    const baseFirstCell = $(".letter-cell", baseCard);
-    const overlayFirstCell = $(".letter-cell", overlayCard);
-    if (!baseFirstCell || !overlayFirstCell) return clearLiveOverlay();
-    const baseFirstRect = baseFirstCell.getBoundingClientRect();
-    const overlayFirstRect = overlayFirstCell.getBoundingClientRect();
-    const strideX = baseFirstRect.width + 2 * state.zoom;
-    const strideY = baseFirstRect.height + 2 * state.zoom;
-    const deltaX = overlayFirstRect.left - baseFirstRect.left;
-    const deltaY = overlayFirstRect.top - baseFirstRect.top;
-    const minimumCellArea = Math.min(
-      baseFirstRect.width * baseFirstRect.height,
-      overlayFirstRect.width * overlayFirstRect.height,
-    );
-    const columnOffsets = [...new Set([Math.floor(deltaX / strideX), Math.ceil(deltaX / strideX)])];
-    const rowOffsets = [...new Set([Math.floor(deltaY / strideY), Math.ceil(deltaY / strideY)])];
-    const alignmentCandidates = rowOffsets.flatMap(rowOffset => columnOffsets.map(columnOffset => {
-      const residualX = deltaX - columnOffset * strideX;
-      const residualY = deltaY - rowOffset * strideY;
-      const overlapWidth = Math.max(0,
-        Math.min(baseFirstRect.width, residualX + overlayFirstRect.width) - Math.max(0, residualX),
-      );
-      const overlapHeight = Math.max(0,
-        Math.min(baseFirstRect.height, residualY + overlayFirstRect.height) - Math.max(0, residualY),
-      );
-      return { rowOffset, columnOffset, area: overlapWidth * overlapHeight };
-    })).filter(candidate => candidate.area >= minimumCellArea * .35).sort((a, b) => b.area - a.area);
-    if (!alignmentCandidates.length) {
-      if (liveOverlayPreviewSignature) clearLiveOverlay();
-      return;
-    }
-    const operation = $("#combineOperation").value;
-    const signature = `${base.id}:${overlay.id}:${deltaX.toFixed(2)}:${deltaY.toFixed(2)}:${operation}`;
-    if (signature === liveOverlayPreviewSignature) return;
-    clearLiveOverlay();
-    liveOverlayPreviewSignature = signature;
-    const baseRows = Math.ceil(base.text.length / base.cols);
-    const overlayCells = $$(".letter-cell", overlayCard);
-    overlayCells.forEach((cell, overlayIndex) => {
-      const overlayRow = Math.floor(overlayIndex / overlay.cols);
-      const overlayColumn = overlayIndex % overlay.cols;
-      let baseIndex = -1;
-      for (const candidate of alignmentCandidates) {
-        const baseRow = overlayRow + candidate.rowOffset;
-        const baseColumn = overlayColumn + candidate.columnOffset;
-        const candidateIndex = baseRow * base.cols + baseColumn;
-        if (baseRow >= 0 && baseRow < baseRows && baseColumn >= 0 && baseColumn < base.cols && candidateIndex >= 0 && candidateIndex < base.text.length) {
-          baseIndex = candidateIndex;
-          break;
-        }
-      }
-      if (baseIndex < 0) return;
-      const a = overlay.text[overlayIndex];
-      const b = base.text[baseIndex];
-      const letter = combineLetters(a, b, operation);
-      const presentation = operationPresentation(a, b, operation, letter);
-      cell.dataset.liveLetter = letter;
+  function applyLiveOverlayResult(resolved, overlayCard) {
+    const cells = $$(".letter-cell", overlayCard);
+    resolved.combined.matches.forEach(match => {
+      if (match.result === " ") return;
+      const cell = cells[match.topIndex];
+      if (!cell) return;
+      const presentation = operationPresentation(match.a, match.b, resolved.operation, match.result);
+      cell.dataset.liveLetter = match.result;
       cell.dataset.liveFormula = presentation.compact;
       cell.title = presentation.title;
       cell.classList.add("live-overlay");
     });
   }
 
+  function renderLiveOverlay(base, overlay, overlayCard) {
+    if (!base) {
+      if (liveOverlayPreviewSignature) clearLiveOverlay(overlayCard);
+      return;
+    }
+    const baseCard = $(`.grid-card[data-id="${base.id}"]`, workspace);
+    if (!baseCard) return clearLiveOverlay(overlayCard);
+    [$(".grid-card-body", baseCard), $(".grid-card-body", overlayCard)].forEach(body => {
+      if (!body) return;
+      body.scrollLeft = 0;
+      body.scrollTop = 0;
+    });
+    const baseFirstCell = $(".letter-cell", baseCard);
+    const overlayFirstCell = $(".letter-cell", overlayCard);
+    if (!baseFirstCell || !overlayFirstCell) return clearLiveOverlay(overlayCard);
+    const baseFirstRect = baseFirstCell.getBoundingClientRect();
+    const overlayFirstRect = overlayFirstCell.getBoundingClientRect();
+    const deltaX = overlayFirstRect.left - baseFirstRect.left;
+    const deltaY = overlayFirstRect.top - baseFirstRect.top;
+    const alignment = alignmentFromCellGeometry({
+      deltaX,
+      deltaY,
+      baseCellWidth: baseFirstRect.width,
+      baseCellHeight: baseFirstRect.height,
+      overlayCellWidth: overlayFirstRect.width,
+      overlayCellHeight: overlayFirstRect.height,
+      horizontalGap: 2 * state.zoom,
+      verticalGap: 2 * state.zoom,
+    });
+    if (!alignment) {
+      if (liveOverlayPreviewSignature) clearLiveOverlay(overlayCard);
+      return;
+    }
+    const operation = $("#combineOperation").value;
+    const signature = `${base.id}:${overlay.id}:${alignment.rowOffset}:${alignment.columnOffset}:${operation}:${state.alphabet}`;
+    if (signature === liveOverlayPreviewSignature) return;
+    clearLiveOverlay(overlayCard);
+    liveOverlayPreviewSignature = signature;
+    const previewLink = createOverlayLink({
+      id: "preview",
+      baseId: base.id,
+      overlayId: overlay.id,
+      rowOffset: alignment.rowOffset,
+      columnOffset: alignment.columnOffset,
+      operation,
+    });
+    const resolved = resolveOverlayLink(previewLink, [base, overlay], state.alphabet);
+    if (resolved) applyLiveOverlayResult(resolved, overlayCard);
+  }
+
   function activateLiveOverlay(base, overlay) {
-    const stride = state.cellSize + 2;
-    let columnOffset = Math.round((overlay.x - base.x) / stride);
-    let rowOffset = Math.round((overlay.y - base.y) / stride);
+    const stride = (state.cellSize + 2) * state.zoom;
+    const snappedAlignment = alignmentFromCellGeometry({
+      deltaX: overlay.x - base.x,
+      deltaY: overlay.y - base.y,
+      baseCellWidth: state.cellSize * state.zoom,
+      baseCellHeight: state.cellSize * state.zoom,
+      horizontalGap: 2 * state.zoom,
+      verticalGap: 2 * state.zoom,
+    });
+    if (!snappedAlignment) {
+      toast("Move the letter cells a little closer before linking them");
+      return false;
+    }
+    let { columnOffset, rowOffset } = snappedAlignment;
     if (base.x + columnOffset * stride < 0) columnOffset = Math.ceil(-base.x / stride);
     if (base.y + rowOffset * stride < 0) rowOffset = Math.ceil(-base.y / stride);
     overlay.x = base.x + columnOffset * stride;
@@ -883,8 +948,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     overlay.z = ++state.z;
     state.selectedGridIds = [overlay.id, base.id];
     state.selectedGridId = overlay.id;
-    state.overlays = state.overlays.filter(link => link.overlayId !== overlay.id);
-    state.overlays.push({
+    const nextLink = createOverlayLink({
       id: uniqueId("live-overlay"),
       baseId: base.id,
       overlayId: overlay.id,
@@ -892,51 +956,28 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       columnOffset,
       operation: $("#combineOperation").value,
     });
-    renderAll();
-    const overlap = countOverlayCells(base, overlay, rowOffset, columnOffset);
-    setStatus(`Live overlay: ${overlap} aligned cell${overlap === 1 ? "" : "s"}`);
-    toast(`A: ${overlay.name} · B: ${base.name}`);
-  }
-
-  function countOverlayCells(base, overlay, rowOffset, columnOffset) {
-    const baseRows = Math.ceil(base.text.length / base.cols);
-    let count = 0;
-    for (let index = 0; index < overlay.text.length; index++) {
-      const row = Math.floor(index / overlay.cols) + rowOffset;
-      const column = index % overlay.cols + columnOffset;
-      const baseIndex = row * base.cols + column;
-      if (row >= 0 && row < baseRows && column >= 0 && column < base.cols && baseIndex < base.text.length) count++;
+    const resolved = resolveOverlayLink(nextLink, [base, overlay], state.alphabet);
+    if (!resolved?.combined.combinedCount) {
+      toast("Those cells overlap, but there are no letter pairs to combine");
+      return false;
     }
-    return count;
+    state.overlays = removeOverlayLinksForGrid(state.overlays, overlay.id);
+    state.overlays.push(nextLink);
+    renderAll();
+    setStatus(`Live overlay: ${resolved.combined.combinedCount} letters from ${resolved.combined.alignedCount} aligned cells`);
+    toast(`A: ${overlay.name} · B: ${base.name}`);
+    return true;
   }
 
   function renderPersistentOverlays() {
     state.overlays.forEach(link => {
-      const base = state.grids.find(grid => grid.id === link.baseId);
-      const overlay = state.grids.find(grid => grid.id === link.overlayId);
+      const resolved = resolveOverlayLink(link, state.grids, state.alphabet);
+      if (!resolved) return;
+      const { overlay } = resolved;
       const overlayCard = $(`.grid-card[data-id="${link.overlayId}"]`, workspace);
-      if (!base || !overlay || !overlayCard) return;
-      const cells = $$(".letter-cell", overlayCard);
-      for (let overlayIndex = 0; overlayIndex < overlay.text.length; overlayIndex++) {
-        const baseRow = Math.floor(overlayIndex / overlay.cols) + link.rowOffset;
-        const baseColumn = overlayIndex % overlay.cols + link.columnOffset;
-        const baseIndex = baseRow * base.cols + baseColumn;
-        if (baseRow < 0 || baseColumn < 0 || baseColumn >= base.cols || baseIndex < 0 || baseIndex >= base.text.length) continue;
-        const cell = cells[overlayIndex];
-        if (!cell) continue;
-        const a = overlay.text[overlayIndex];
-        const b = base.text[baseIndex];
-        cell.dataset.liveLetter = combineLetters(a, b, link.operation);
-        const presentation = operationPresentation(a, b, link.operation, cell.dataset.liveLetter);
-        cell.dataset.liveFormula = presentation.compact;
-        cell.title = presentation.title;
-        cell.classList.add("live-overlay");
-      }
+      if (!overlay || !overlayCard) return;
+      applyLiveOverlayResult(resolved, overlayCard);
     });
-  }
-
-  function combineLetters(a, b, operation, alphabet = state.alphabet) {
-    return combineCipherLetters(a, b, operation, alphabet);
   }
 
   function combinedText(base, overlay, operation) {
@@ -944,22 +985,31 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
   }
 
   function overlayLinkForOperands(operandA, operandB) {
-    if (!operandA || !operandB) return null;
-    return state.overlays.find(link =>
-      (link.overlayId === operandA.id && link.baseId === operandB.id)
-      || (link.overlayId === operandB.id && link.baseId === operandA.id)
-    ) || null;
+    return findOverlayLink(state.overlays, operandA?.id, operandB?.id);
   }
 
-  function alignedCombination(operandA, operandB, link, operation) {
-    const alignment = {
-      topOperand: link.overlayId === operandA.id ? "a" : "b",
-      rowOffset: link.rowOffset,
-      columnOffset: link.columnOffset,
+  function overlayLinkForGrid(gridId) {
+    return [...state.overlays].reverse().find(link => link.baseId === gridId || link.overlayId === gridId) || null;
+  }
+
+  function activeOverlayLink(operands = state.selectedGridIds.map(id => state.grids.find(grid => grid.id === id)).filter(Boolean)) {
+    const selectedLink = overlayLinkForOperands(operands[0], operands[1]);
+    if (selectedLink || operands.length >= 2) return selectedLink;
+    return overlayLinkForGrid(state.selectedGridId);
+  }
+
+  function alignedCombination(link, operation) {
+    const resolved = resolveOverlayLink(link, state.grids, state.alphabet, operation);
+    if (!resolved) return null;
+    return {
+      ...resolved.combined,
+      text: resolved.combined.compactText,
+      columns: resolved.combined.overlapColumns,
+      alignment: resolved.alignment,
+      operandA: resolved.operandA,
+      operandB: resolved.operandB,
+      layoutGrid: resolved.overlay,
     };
-    const combined = combineAlignedCipherText(operandA, operandB, operation, state.alphabet, alignment);
-    alignment.columns = combined.overlapColumns;
-    return { ...combined, text: combined.compactText, columns: combined.overlapColumns, alignment };
   }
 
   function refreshDerivedGrids() {
@@ -971,11 +1021,11 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       if (grid.derived.alignment) {
         const combined = combineAlignedCipherText(base, overlay, grid.derived.operation, state.alphabet, grid.derived.alignment);
         grid.text = combined.compactText;
-        grid.cols = grid.derived.alignment.columns || combined.overlapColumns;
-        grid.derived.alignment.columns ||= combined.overlapColumns;
+        grid.cols = combined.overlapColumns;
+        delete grid.derived.alignment.columns;
       } else {
         grid.text = combinedText(base, overlay, grid.derived.operation);
-        grid.cols = Math.min(base.cols, overlay.cols);
+        grid.cols = Math.max(1, Math.min(base.cols, overlay.cols, grid.text.length || 1));
       }
       grid.cellSize = Math.min(base.cellSize, overlay.cellSize);
     });
@@ -1072,36 +1122,45 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     grid.height = gridMinimumHeight(grid);
   }
 
-  function combineGrids(base, overlay) {
+  function combineGrids(selectedA, selectedB) {
     const alphabet = state.alphabet;
     if (alphabet.length < 2) return toast("Choose an alphabet with at least two unique symbols");
-    const link = overlayLinkForOperands(base, overlay);
+    const link = overlayLinkForOperands(selectedA, selectedB);
     const operation = link?.operation || $("#combineOperation").value;
     const definition = GRID_OPERATIONS[operation] || GRID_OPERATIONS.add;
+    const flatText = link ? null : combinedText(selectedA, selectedB, operation);
     const combined = link
-      ? alignedCombination(base, overlay, link, operation)
-      : { text: combinedText(base, overlay, operation), columns: Math.min(base.cols, overlay.cols), alignedCount: Math.min(base.text.length, overlay.text.length), alignment: null };
-    const layoutGrid = link ? (combined.alignment.topOperand === "a" ? base : overlay) : null;
-    const resultWidth = link ? gridWidthForColumns(layoutGrid, combined.columns) : Math.max(220, Math.min(base.width, overlay.width));
+      ? alignedCombination(link, operation)
+      : {
+        text: flatText,
+        columns: Math.max(1, Math.min(selectedA.cols, selectedB.cols, flatText.length || 1)),
+        alignedCount: Math.min(selectedA.text.length, selectedB.text.length),
+        alignment: null,
+      };
+    if (!combined) return toast("That live overlay is no longer valid");
+    const operandA = combined.operandA || selectedA;
+    const operandB = combined.operandB || selectedB;
+    const layoutGrid = combined.layoutGrid || null;
+    const resultWidth = link ? gridWidthForColumns(layoutGrid, combined.columns) : Math.max(220, Math.min(operandA.width, operandB.width));
     const resultRows = Math.max(1, Math.ceil(combined.text.length / combined.columns));
-    const resultHeight = link ? gridMinimumHeightForRows(layoutGrid, resultRows) : Math.max(150, Math.min(base.height, overlay.height));
+    const resultHeight = link ? gridMinimumHeightForRows(layoutGrid, resultRows) : Math.max(150, Math.min(operandA.height, operandB.height));
     const resultPosition = positionInsideViewport(
       resultWidth,
       resultHeight,
-      Math.round((Math.max(base.x, overlay.x) + 24) / 8) * 8,
-      Math.round((Math.max(base.y, overlay.y) + 48) / 8) * 8,
+      Math.round((Math.max(operandA.x, operandB.x) + 24) / 8) * 8,
+      Math.round((Math.max(operandA.y, operandB.y) + 48) / 8) * 8,
     );
     const resultName = definition.reverseOperands
-      ? `${overlay.name} ${definition.symbol} ${base.name}`
-      : `${base.name} ${definition.symbol} ${overlay.name}`;
+      ? `${operandB.name} ${definition.symbol} ${operandA.name}`
+      : `${operandA.name} ${definition.symbol} ${operandB.name}`;
     const result = {
       id: uniqueId("operation"), name: resultName,
-      text: combined.text, cols: combined.columns, cellSize: Math.min(base.cellSize, overlay.cellSize),
+      text: combined.text, cols: combined.columns, cellSize: Math.min(operandA.cellSize, operandB.cellSize),
       x: resultPosition.x,
       y: resultPosition.y,
       width: resultWidth, height: resultHeight,
       selected: new Set(), highlights: {}, z: ++state.z,
-      derived: { baseId: base.id, overlayId: overlay.id, operation, alignment: combined.alignment }
+      derived: { baseId: operandA.id, overlayId: operandB.id, operation, alignment: combined.alignment }
     };
     state.grids.push(result);
     state.selectedGridId = result.id;
@@ -1243,7 +1302,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     const historyBefore = captureSnapshot();
     const position = positionInsideViewport(source.width, source.height, source.x + 32, source.y + 32);
     const copy = { ...source, id: uniqueId(), name: `${source.name} copy`, x: position.x, y: position.y, highlights: { ...(source.highlights || {}) }, selected: new Set(), z: ++state.z };
-    if (copy.derived) copy.derived = { ...copy.derived };
+    if (copy.derived) copy.derived = { ...copy.derived, alignment: copy.derived.alignment ? { ...copy.derived.alignment } : null };
     state.grids.push(copy);
     state.selectedGridId = copy.id;
     state.selectedGridIds = [copy.id];
@@ -1258,9 +1317,17 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     const historyBefore = captureSnapshot();
     state.grids.forEach(item => { if (item.syncSourceId === grid.id) item.syncSourceId = null; });
     const removedIds = new Set([grid.id]);
-    state.grids.forEach(item => {
-      if (item.derived && (item.derived.baseId === grid.id || item.derived.overlayId === grid.id)) removedIds.add(item.id);
-    });
+    let foundDependent = true;
+    while (foundDependent) {
+      foundDependent = false;
+      state.grids.forEach(item => {
+        if (!item.derived || removedIds.has(item.id)) return;
+        if (removedIds.has(item.derived.baseId) || removedIds.has(item.derived.overlayId)) {
+          removedIds.add(item.id);
+          foundDependent = true;
+        }
+      });
+    }
     state.grids = state.grids.filter(item => !removedIds.has(item.id));
     state.overlays = state.overlays.filter(overlay => !removedIds.has(overlay.baseId) && !removedIds.has(overlay.overlayId));
     state.selectedGridId = state.grids.at(-1)?.id || null;
@@ -1303,13 +1370,18 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
   function updateInspector() {
     const grid = currentGrid();
     state.selectedGridIds = state.selectedGridIds.filter(id => state.grids.some(item => item.id === id)).slice(0, 2);
-    const operands = state.selectedGridIds.map(id => state.grids.find(item => item.id === id)).filter(Boolean);
+    const selectedOperands = state.selectedGridIds.map(id => state.grids.find(item => item.id === id)).filter(Boolean);
+    const link = activeOverlayLink(selectedOperands);
+    const resolvedLink = link ? resolveOverlayLink(link, state.grids, state.alphabet) : null;
+    const operands = resolvedLink ? [resolvedLink.operandA, resolvedLink.operandB] : selectedOperands;
     $("#operandA").textContent = operands[0]?.name || "Select first grid";
     $("#operandB").textContent = operands[1]?.name || "Select second grid";
-    $("#runGridOperation").disabled = operands.length !== 2;
-    $("#runGridOperation").textContent = overlayLinkForOperands(operands[0], operands[1])
-      ? "Create compact grid from live overlay"
+    $("#runGridOperation").disabled = !resolvedLink && selectedOperands.length !== 2;
+    $("#runGridOperation").textContent = resolvedLink
+      ? "Create grid from live overlay"
       : "Create live result from A and B";
+    if (grid?.derived) $("#combineOperation").value = grid.derived.operation;
+    else if (resolvedLink) $("#combineOperation").value = resolvedLink.link.operation;
     const controls = [$("#gridName"), $("#gridColumns"), $("#cellSize"), $("#gridText")];
     controls.forEach(control => control.disabled = !grid);
     $("#gridName").value = grid?.name || "Select a grid";
@@ -1772,8 +1844,13 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       const raw = localStorage.getItem("kryptos-sandbox-snapshot");
       if (!raw) return false;
       const snapshot = JSON.parse(raw);
-      state.grids = snapshot.grids.map(grid => ({ ...grid, highlights: { ...(grid.highlights || {}) }, selected: new Set(grid.selected || []) }));
-      state.overlays = snapshot.overlays || [];
+      state.grids = snapshot.grids.map(grid => ({
+        ...grid,
+        derived: grid.derived ? { ...grid.derived, alignment: grid.derived.alignment ? { ...grid.derived.alignment } : null } : null,
+        highlights: { ...(grid.highlights || {}) },
+        selected: new Set(grid.selected || []),
+      }));
+      state.overlays = normalizeOverlayLinks(snapshot.overlays);
       state.alphabet = snapshot.alphabet || KRYPTOS_ALPHABET;
       state.cellSize = snapshot.cellSize || 28;
       $("#workspaceTitle").textContent = snapshot.workspaceTitle || snapshot.title || "K4 / Transposition studies";
@@ -1844,8 +1921,8 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     workspace.addEventListener("dblclick", event => {
       if (event.target.closest(".grid-card")) return;
       const bounds = workspace.getBoundingClientRect();
-      const x = Math.max(0, Math.round(((event.clientX - bounds.left + workspace.scrollLeft) / state.zoom) / 8) * 8);
-      const y = Math.max(0, Math.round(((event.clientY - bounds.top + workspace.scrollTop) / state.zoom) / 8) * 8);
+      const x = Math.max(0, Math.round((event.clientX - bounds.left + workspace.scrollLeft) / 8) * 8);
+      const y = Math.max(0, Math.round((event.clientY - bounds.top + workspace.scrollTop) / 8) * 8);
       addGrid("KRYPTOS", null, { x, y, width: 260, height: 180 });
       setStatus("Created a grid at the double-click position");
     });
@@ -1885,8 +1962,8 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
         return;
       }
       const bounds = workspace.getBoundingClientRect();
-      const x = Math.max(0, Math.round(((event.clientX - bounds.left + workspace.scrollLeft) / state.zoom) / 8) * 8);
-      const y = Math.max(0, Math.round(((event.clientY - bounds.top + workspace.scrollTop) / state.zoom) / 8) * 8);
+      const x = Math.max(0, Math.round((event.clientX - bounds.left + workspace.scrollLeft) / 8) * 8);
+      const y = Math.max(0, Math.round((event.clientY - bounds.top + workspace.scrollTop) / 8) * 8);
       showContextMenu([
         { icon: "▦", label: "New grid here", action: () => addGrid("KRYPTOS", null, { x, y, width: 260, height: 180 }) },
         { icon: "⌘", label: "Paste as new grid here", action: async () => {
@@ -1974,20 +2051,22 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     $("#combineOperation").addEventListener("change", event => {
       const grid = currentGrid();
       if (grid?.derived) grid.derived.operation = event.target.value;
-      state.overlays.forEach(overlay => { if (overlay.overlayId === grid?.id) overlay.operation = event.target.value; });
+      const link = activeOverlayLink();
+      if (link) link.operation = event.target.value;
       renderAll();
       commitHistory(preferenceHistoryBefore, "change combine operation");
     });
     $("#runGridOperation").addEventListener("click", () => {
-      const [baseId, overlayId] = state.selectedGridIds;
-      const base = state.grids.find(grid => grid.id === baseId);
-      const overlay = state.grids.find(grid => grid.id === overlayId);
-      if (!base || !overlay) return toast("Select operand A, then operand B");
+      const selectedOperands = state.selectedGridIds.map(id => state.grids.find(grid => grid.id === id)).filter(Boolean);
+      const link = activeOverlayLink(selectedOperands);
+      const resolvedLink = link ? resolveOverlayLink(link, state.grids, state.alphabet) : null;
+      const operandA = resolvedLink?.operandA || selectedOperands[0];
+      const operandB = resolvedLink?.operandB || selectedOperands[1];
+      if (!operandA || !operandB) return toast("Select operand A, then operand B");
       const before = captureSnapshot();
-      const link = overlayLinkForOperands(base, overlay);
       const operation = link?.operation || $("#combineOperation").value;
-      combineGrids(base, overlay);
-      commitHistory(before, `${operation} ${base.name} and ${overlay.name}`);
+      combineGrids(operandA, operandB);
+      commitHistory(before, `${operation} ${operandA.name} and ${operandB.name}`);
     });
 
     $$(".inspector-tabs button").forEach(button => button.addEventListener("click", () => {
@@ -2046,8 +2125,8 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       addGrid(strideSelectedRoute, `Route N=${strideSelected.step} mod ${strideSelected.modulus}`, { cols: columns });
     });
 
-    $("#zoomIn").addEventListener("click", () => { const before = captureSnapshot(); state.zoom = clamp(state.zoom + .1, .6, 1.5); applyZoom(); commitHistory(before, "zoom in"); });
-    $("#zoomOut").addEventListener("click", () => { const before = captureSnapshot(); state.zoom = clamp(state.zoom - .1, .6, 1.5); applyZoom(); commitHistory(before, "zoom out"); });
+    $("#zoomIn").addEventListener("click", () => { const before = captureSnapshot(); state.zoom = clamp(state.zoom + .1, .6, 1.5); renderAll(); commitHistory(before, "zoom in"); });
+    $("#zoomOut").addEventListener("click", () => { const before = captureSnapshot(); state.zoom = clamp(state.zoom - .1, .6, 1.5); renderAll(); commitHistory(before, "zoom out"); });
     $("#helpButton").addEventListener("click", () => $("#helpModal").classList.remove("hidden"));
     $("#closeHelp").addEventListener("click", () => $("#helpModal").classList.add("hidden"));
     $("#helpModal").addEventListener("click", event => { if (event.target.id === "helpModal") event.currentTarget.classList.add("hidden"); });
@@ -2217,7 +2296,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
   function enableLiveReload() {
     const developmentHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
     if (!developmentHosts.has(location.hostname)) return;
-    const sources = ["index.html", "styles.css", "app.js", "modules/cipher.js", "modules/analysis.js", "modules/transposition-analysis.js", "modules/utils.js", "modules/matrix.js", "modules/context-menu.js"];
+    const sources = ["index.html", "styles.css", "app.js", "modules/cipher.js", "modules/overlay.js", "modules/analysis.js", "modules/transposition-analysis.js", "modules/utils.js", "modules/matrix.js", "modules/context-menu.js"];
     let baseline = null;
     const fingerprint = async () => {
       const parts = await Promise.all(sources.map(async source => {
