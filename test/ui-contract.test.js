@@ -52,3 +52,11 @@ test("quick imports include a fresh K4-length uniform random grid", () => {
   assert.match(app, /randomLetters\(97\)/);
   assert.match(app, /Uniform random · 97 letters/);
 });
+
+test("whole-grid copy and paste uses structured duplication while cell copy stays textual", () => {
+  assert.match(app, /!grid\.selected\.size && state\.selectedGridIds\.length === 1/);
+  assert.match(app, /application\/x-kryptos-grid/);
+  assert.match(app, /duplicateGrid\(clipboardGrid\)/);
+  assert.match(app, /copiedGridClipboard = null/);
+  assert.match(html, /duplicate a copied whole grid/);
+});

@@ -41,6 +41,7 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
   let gridShapeScanToken = 0;
   let gridShapeScanTimer = null;
   let gridShapeLastSignature = "";
+  let copiedGridClipboard = null;
   let libraryEditorCommit = null;
   let liveOverlayPreviewSignature = "";
   const STARTER_LIBRARY_VERSION = 1;
@@ -1342,19 +1343,21 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
     toast("Created synchronized view");
   }
 
-  function duplicateGrid() {
-    const source = currentGrid();
+  function duplicateGrid(source = currentGrid()) {
     if (!source) return;
     const historyBefore = captureSnapshot();
     const position = positionInsideViewport(source.width, source.height, source.x + 32, source.y + 32);
     const copy = { ...source, id: uniqueId(), name: `${source.name} copy`, x: position.x, y: position.y, highlights: { ...(source.highlights || {}) }, selected: new Set(), z: ++state.z };
     if (copy.derived) copy.derived = { ...copy.derived, alignment: copy.derived.alignment ? { ...copy.derived.alignment } : null };
+    if (copy.syncSourceId && !state.grids.some(grid => grid.id === copy.syncSourceId)) copy.syncSourceId = null;
+    if (copy.derived && (!state.grids.some(grid => grid.id === copy.derived.baseId) || !state.grids.some(grid => grid.id === copy.derived.overlayId))) copy.derived = null;
     state.grids.push(copy);
     state.selectedGridId = copy.id;
     state.selectedGridIds = [copy.id];
     renderAll();
     commitHistory(historyBefore, `duplicate ${source.name}`);
     toast("Grid duplicated");
+    return copy;
   }
 
   function deleteGrid() {
@@ -2525,17 +2528,42 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
       if (event.key.toLowerCase() === "h") $(".tool-button[data-mode='pan']").click();
     });
     document.addEventListener("copy", event => {
-      if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName) && document.activeElement.selectionStart !== document.activeElement.selectionEnd) return;
+      if (document.activeElement.matches("input, textarea, select, [contenteditable='true']")) {
+        copiedGridClipboard = null;
+        return;
+      }
       const grid = currentGrid();
       if (!grid) return;
       event.preventDefault();
-      event.clipboardData.setData("text/plain", formatGridForClipboard(grid));
-      toast(grid.selected.size ? `Copied ${grid.selected.size} selected letters` : `Copied ${grid.cols} × ${Math.ceil(grid.text.length / grid.cols)} grid`);
+      const plainText = formatGridForClipboard(grid);
+      event.clipboardData.setData("text/plain", plainText);
+      if (!grid.selected.size && state.selectedGridIds.length === 1) {
+        copiedGridClipboard = { grid: cloneSerializable({ ...grid, selected: [...grid.selected] }), plainText };
+        try { event.clipboardData.setData("application/x-kryptos-grid", JSON.stringify(copiedGridClipboard.grid)); } catch {}
+        toast(`Copied ${grid.cols} × ${Math.ceil(grid.text.length / grid.cols)} grid · paste to duplicate`);
+      } else {
+        copiedGridClipboard = null;
+        toast(grid.selected.size ? `Copied ${grid.selected.size} selected letters` : `Copied ${grid.cols} × ${Math.ceil(grid.text.length / grid.cols)} grid`);
+      }
     });
     document.addEventListener("paste", event => {
-      if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
+      if (document.activeElement.matches("input, textarea, select, [contenteditable='true']")) return;
       event.preventDefault();
-      pasteIntoGrid(event.clipboardData.getData("text/plain"));
+      const plainText = event.clipboardData.getData("text/plain");
+      let clipboardGrid = null;
+      try {
+        const structured = event.clipboardData.getData("application/x-kryptos-grid");
+        if (structured) clipboardGrid = JSON.parse(structured);
+      } catch {}
+      const normalizedPlainText = plainText.replaceAll("\r\n", "\n");
+      const internalMatch = copiedGridClipboard?.plainText.replaceAll("\r\n", "\n") === normalizedPlainText;
+      if (!clipboardGrid && internalMatch) clipboardGrid = copiedGridClipboard.grid;
+      if (clipboardGrid?.text && Number.isFinite(Number(clipboardGrid.cols))) {
+        duplicateGrid(clipboardGrid);
+        return;
+      }
+      copiedGridClipboard = null;
+      pasteIntoGrid(plainText);
     });
   }
 
