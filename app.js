@@ -2,8 +2,8 @@ import {
   KRYPTOS_ALPHABET, NORMAL_ALPHABET, K1_CIPHERTEXT, K2_CIPHERTEXT, K3_CIPHERTEXT, K4_CIPHERTEXT, GRID_OPERATIONS,
   K1_PLAINTEXT, K2_PLAINTEXT, K3_PLAINTEXT,
   KRYPTOS_LEFT_PLATE, KRYPTOS_LEFT_PLATE_COLUMNS, KRYPTOS_RIGHT_PLATE, KRYPTOS_RIGHT_PLATE_COLUMNS,
-  cleanText, cleanUnique, positionalK4Cribs, randomEnglishBookSample, combineCipherLetters, combineCipherText,
-} from "./modules/cipher.js?v=4";
+  cleanText, cleanUnique, positionalK4Cribs, randomEnglishBookSample, combineAlignedCipherText, combineCipherLetters, combineCipherText,
+} from "./modules/cipher.js?v=5";
 import {
   letterCounts, indexOfCoincidence, frequencySimilarity, estimateNulls, formatPercent,
   scanVigenerePeriods, suggestVigenereKey, decryptVigenere, coincidenceSignificance, formatPValue,
@@ -943,14 +943,37 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     return combineCipherText(base, overlay, operation, state.alphabet);
   }
 
+  function overlayLinkForOperands(operandA, operandB) {
+    if (!operandA || !operandB) return null;
+    return state.overlays.find(link =>
+      (link.overlayId === operandA.id && link.baseId === operandB.id)
+      || (link.overlayId === operandB.id && link.baseId === operandA.id)
+    ) || null;
+  }
+
+  function alignedCombination(operandA, operandB, link, operation) {
+    const alignment = {
+      topOperand: link.overlayId === operandA.id ? "a" : "b",
+      rowOffset: link.rowOffset,
+      columnOffset: link.columnOffset,
+    };
+    return { ...combineAlignedCipherText(operandA, operandB, operation, state.alphabet, alignment), alignment };
+  }
+
   function refreshDerivedGrids() {
     state.grids.forEach(grid => {
       if (!grid.derived) return;
       const base = state.grids.find(item => item.id === grid.derived.baseId);
       const overlay = state.grids.find(item => item.id === grid.derived.overlayId);
       if (!base || !overlay) return;
-      grid.text = combinedText(base, overlay, grid.derived.operation);
-      grid.cols = Math.min(base.cols, overlay.cols);
+      if (grid.derived.alignment) {
+        const combined = combineAlignedCipherText(base, overlay, grid.derived.operation, state.alphabet, grid.derived.alignment);
+        grid.text = combined.text;
+        grid.cols = combined.columns;
+      } else {
+        grid.text = combinedText(base, overlay, grid.derived.operation);
+        grid.cols = Math.min(base.cols, overlay.cols);
+      }
       grid.cellSize = Math.min(base.cellSize, overlay.cellSize);
     });
   }
@@ -1049,13 +1072,18 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
   function combineGrids(base, overlay) {
     const alphabet = state.alphabet;
     if (alphabet.length < 2) return toast("Choose an alphabet with at least two unique symbols");
-    const operation = $("#combineOperation").value;
+    const link = overlayLinkForOperands(base, overlay);
+    const operation = link?.operation || $("#combineOperation").value;
     const definition = GRID_OPERATIONS[operation] || GRID_OPERATIONS.add;
-    const length = Math.min(base.text.length, overlay.text.length);
-    const text = combinedText(base, overlay, operation);
+    const combined = link
+      ? alignedCombination(base, overlay, link, operation)
+      : { text: combinedText(base, overlay, operation), columns: Math.min(base.cols, overlay.cols), alignedCount: Math.min(base.text.length, overlay.text.length), alignment: null };
+    const layoutGrid = link ? (combined.alignment.topOperand === "a" ? base : overlay) : null;
+    const resultWidth = link ? layoutGrid.width : Math.max(220, Math.min(base.width, overlay.width));
+    const resultHeight = link ? layoutGrid.height : Math.max(150, Math.min(base.height, overlay.height));
     const resultPosition = positionInsideViewport(
-      Math.max(220, Math.min(base.width, overlay.width)),
-      Math.max(150, Math.min(base.height, overlay.height)),
+      resultWidth,
+      resultHeight,
       Math.round((Math.max(base.x, overlay.x) + 24) / 8) * 8,
       Math.round((Math.max(base.y, overlay.y) + 48) / 8) * 8,
     );
@@ -1064,19 +1092,19 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       : `${base.name} ${definition.symbol} ${overlay.name}`;
     const result = {
       id: uniqueId("operation"), name: resultName,
-      text, cols: Math.min(base.cols, overlay.cols), cellSize: Math.min(base.cellSize, overlay.cellSize),
+      text: combined.text, cols: combined.columns, cellSize: Math.min(base.cellSize, overlay.cellSize),
       x: resultPosition.x,
       y: resultPosition.y,
-      width: Math.max(220, Math.min(base.width, overlay.width)), height: Math.max(150, Math.min(base.height, overlay.height)),
+      width: resultWidth, height: resultHeight,
       selected: new Set(), highlights: {}, z: ++state.z,
-      derived: { baseId: base.id, overlayId: overlay.id, operation }
+      derived: { baseId: base.id, overlayId: overlay.id, operation, alignment: combined.alignment }
     };
     state.grids.push(result);
     state.selectedGridId = result.id;
     state.selectedGridIds = [result.id];
     renderAll();
     $(`.grid-card[data-id="${result.id}"]`, workspace)?.classList.add("combine-flash");
-    setStatus(`Combined ${length} letters: ${definition.label}`);
+    setStatus(`${link ? "Materialized" : "Combined"} ${combined.alignedCount} aligned cells: ${definition.label}`);
     toast(`Created ${result.name}`);
   }
 
@@ -1275,6 +1303,9 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     $("#operandA").textContent = operands[0]?.name || "Select first grid";
     $("#operandB").textContent = operands[1]?.name || "Select second grid";
     $("#runGridOperation").disabled = operands.length !== 2;
+    $("#runGridOperation").textContent = overlayLinkForOperands(operands[0], operands[1])
+      ? "Create grid from live overlay"
+      : "Create live result from A and B";
     const controls = [$("#gridName"), $("#gridColumns"), $("#cellSize"), $("#gridText")];
     controls.forEach(control => control.disabled = !grid);
     $("#gridName").value = grid?.name || "Select a grid";
@@ -1949,8 +1980,10 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       const overlay = state.grids.find(grid => grid.id === overlayId);
       if (!base || !overlay) return toast("Select operand A, then operand B");
       const before = captureSnapshot();
+      const link = overlayLinkForOperands(base, overlay);
+      const operation = link?.operation || $("#combineOperation").value;
       combineGrids(base, overlay);
-      commitHistory(before, `${$("#combineOperation").value} ${base.name} and ${overlay.name}`);
+      commitHistory(before, `${operation} ${base.name} and ${overlay.name}`);
     });
 
     $$(".inspector-tabs button").forEach(button => button.addEventListener("click", () => {

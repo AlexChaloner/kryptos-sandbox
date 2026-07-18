@@ -126,3 +126,26 @@ export function combineCipherText(base, overlay, operation, alphabet) {
   for (let index = 0; index < length; index++) text += combineCipherLetters(base.text[index], overlay.text[index], operation, alphabet);
   return text;
 }
+
+export function combineAlignedCipherText(operandA, operandB, operation, alphabet, alignment) {
+  const topIsA = alignment.topOperand === "a";
+  const top = topIsA ? operandA : operandB;
+  const base = topIsA ? operandB : operandA;
+  const baseRows = Math.ceil(base.text.length / base.cols);
+  let text = "";
+  let alignedCount = 0;
+  for (let topIndex = 0; topIndex < top.text.length; topIndex++) {
+    const baseRow = Math.floor(topIndex / top.cols) + alignment.rowOffset;
+    const baseColumn = topIndex % top.cols + alignment.columnOffset;
+    const baseIndex = baseRow * base.cols + baseColumn;
+    if (baseRow < 0 || baseRow >= baseRows || baseColumn < 0 || baseColumn >= base.cols || baseIndex < 0 || baseIndex >= base.text.length) {
+      text += " ";
+      continue;
+    }
+    alignedCount++;
+    const a = topIsA ? top.text[topIndex] : base.text[baseIndex];
+    const b = topIsA ? base.text[baseIndex] : top.text[topIndex];
+    text += combineCipherLetters(a, b, operation, alphabet);
+  }
+  return { text, columns: top.cols, alignedCount };
+}
