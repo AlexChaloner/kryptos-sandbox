@@ -1,14 +1,15 @@
 import {
   KRYPTOS_ALPHABET, NORMAL_ALPHABET, K1_CIPHERTEXT, K2_CIPHERTEXT, K3_CIPHERTEXT, K4_CIPHERTEXT, GRID_OPERATIONS,
   K1_PLAINTEXT, K2_PLAINTEXT, K3_PLAINTEXT,
+  KRYPTOS_LEFT_PLATE, KRYPTOS_LEFT_PLATE_COLUMNS, KRYPTOS_RIGHT_PLATE, KRYPTOS_RIGHT_PLATE_COLUMNS,
   cleanText, cleanUnique, positionalK4Cribs, randomEnglishBookSample, combineCipherLetters, combineCipherText,
-} from "./modules/cipher.js?v=3";
+} from "./modules/cipher.js?v=4";
 import {
   letterCounts, indexOfCoincidence, frequencySimilarity, estimateNulls, formatPercent,
   scanVigenerePeriods, suggestVigenereKey, decryptVigenere, coincidenceSignificance, formatPValue,
 } from "./modules/analysis.js";
 import { uniqueId, clamp, escapeHtml } from "./modules/utils.js";
-import { transformSparseText } from "./modules/matrix.js";
+import { transformSparseIndex, transformSparseText } from "./modules/matrix.js?v=2";
 import { createContextMenuController } from "./modules/context-menu.js";
 import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition-analysis.js";
 
@@ -29,6 +30,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
   let strideLastSignature = "";
   let libraryEditorCommit = null;
   const STARTER_LIBRARY_VERSION = 1;
+  const LETTER_COLOURS = new Set(["amber", "blue", "coral", "green"]);
 
   const state = {
     grids: [],
@@ -93,6 +95,17 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     return state.grids.filter(item => synchronizedRoot(item)?.id === root.id);
   }
 
+  function normalizedHighlights(grid) {
+    const highlights = {};
+    Object.entries(grid.highlights || {}).forEach(([rawIndex, colour]) => {
+      const index = Number(rawIndex);
+      if (Number.isInteger(index) && index >= 0 && index < grid.text.length && grid.text[index] !== " " && LETTER_COLOURS.has(colour)) {
+        highlights[index] = colour;
+      }
+    });
+    return highlights;
+  }
+
   function refreshSynchronizedViews() {
     state.grids.forEach(grid => {
       if (!grid.syncSourceId) return;
@@ -100,6 +113,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       if (!source || source.id === grid.id) return;
       grid.text = source.text;
       grid.selected = new Set([...grid.selected].filter(index => index < grid.text.length));
+      grid.highlights = normalizedHighlights(grid);
     });
   }
 
@@ -123,7 +137,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
 
   function captureSnapshot() {
     return {
-      grids: state.grids.map(grid => ({ ...grid, derived: grid.derived ? { ...grid.derived } : null, selected: [...grid.selected] })),
+      grids: state.grids.map(grid => ({ ...grid, derived: grid.derived ? { ...grid.derived } : null, highlights: { ...(grid.highlights || {}) }, selected: [...grid.selected] })),
       overlays: state.overlays.map(overlay => ({ ...overlay })),
       selectedGridId: state.selectedGridId,
       selectedGridIds: [...state.selectedGridIds],
@@ -154,7 +168,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
 
   function restoreSnapshot(snapshot) {
     state.restoringHistory = true;
-    state.grids = snapshot.grids.map(grid => ({ ...grid, derived: grid.derived ? { ...grid.derived } : null, selected: new Set(grid.selected || []) }));
+    state.grids = snapshot.grids.map(grid => ({ ...grid, derived: grid.derived ? { ...grid.derived } : null, highlights: { ...(grid.highlights || {}) }, selected: new Set(grid.selected || []) }));
     state.overlays = (snapshot.overlays || []).map(overlay => ({ ...overlay }));
     state.selectedGridId = snapshot.selectedGridId;
     state.selectedGridIds = snapshot.selectedGridIds || (snapshot.selectedGridId ? [snapshot.selectedGridId] : []);
@@ -451,7 +465,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
 
   function renderAll() {
     migrateLegacyK4Imports();
-    state.grids.forEach(grid => { grid.cellSize = state.cellSize; });
+    state.grids.forEach(grid => { grid.cellSize = state.cellSize; grid.highlights = normalizedHighlights(grid); });
     refreshSynchronizedViews();
     refreshDerivedGrids();
     refreshSynchronizedViews();
@@ -544,7 +558,8 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       const cell = document.createElement("div");
       const isEmpty = !letter || letter === " ";
       const isUnknown = letter === "?";
-      cell.className = `letter-cell${isEmpty ? " empty" : ""}${isUnknown ? " unknown" : ""}${grid.selected.has(index) ? " selected" : ""}`;
+      const highlight = grid.highlights?.[index];
+      cell.className = `letter-cell${isEmpty ? " empty" : ""}${isUnknown ? " unknown" : ""}${highlight ? ` highlight-${highlight}` : ""}${grid.selected.has(index) ? " selected" : ""}`;
       cell.dataset.index = index;
       cell.style.width = `${grid.cellSize}px`;
       cell.style.height = `${grid.cellSize}px`;
@@ -993,7 +1008,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       x: resultPosition.x,
       y: resultPosition.y,
       width: Math.max(220, Math.min(base.width, overlay.width)), height: Math.max(150, Math.min(base.height, overlay.height)),
-      selected: new Set(), z: ++state.z,
+      selected: new Set(), highlights: {}, z: ++state.z,
       derived: { baseId: base.id, overlayId: overlay.id, operation }
     };
     state.grids.push(result);
@@ -1031,7 +1046,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       id: uniqueId(), name: name || `Untitled grid ${index}`, text: cleaned,
       cols: options.cols || Math.min(10, Math.max(1, cleaned.length)), cellSize: 28,
       x: position.x, y: position.y, width, height,
-      selected: new Set(), z: ++state.z
+      selected: new Set(), highlights: {}, z: ++state.z
     };
     if (options.fitContent) {
       fitGridCardToContent(grid);
@@ -1115,6 +1130,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       width: 280,
       height: 180,
       selected: new Set(selected.selected),
+      highlights: { ...(selected.highlights || {}) },
       selectionOrientation: selected.selectionOrientation || "horizontal",
       syncSourceId: source.id,
       syncRoute: "row-major",
@@ -1134,7 +1150,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     if (!source) return;
     const historyBefore = captureSnapshot();
     const position = positionInsideViewport(source.width, source.height, source.x + 32, source.y + 32);
-    const copy = { ...source, id: uniqueId(), name: `${source.name} copy`, x: position.x, y: position.y, selected: new Set(), z: ++state.z };
+    const copy = { ...source, id: uniqueId(), name: `${source.name} copy`, x: position.x, y: position.y, highlights: { ...(source.highlights || {}) }, selected: new Set(), z: ++state.z };
     if (copy.derived) copy.derived = { ...copy.derived };
     state.grids.push(copy);
     state.selectedGridId = copy.id;
@@ -1162,6 +1178,16 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     toast(`Deleted ${grid.name}`);
   }
 
+  function transformHighlights(grid, transformed, kind) {
+    const highlights = {};
+    Object.entries(grid.highlights || {}).forEach(([rawIndex, colour]) => {
+      const index = Number(rawIndex);
+      const target = transformSparseIndex(index, grid.text.length, grid.cols, kind);
+      if (target >= 0 && target < transformed.text.length && transformed.text[target] !== " ") highlights[target] = colour;
+    });
+    return highlights;
+  }
+
   function transformGrid(kind) {
     const grid = currentGrid();
     if (!grid) return;
@@ -1170,13 +1196,16 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     if (detachedSynchronizedView) grid.syncSourceId = null;
     if (grid.derived) grid.derived = null;
     const transformed = transformSparseText(grid.text, grid.cols, kind);
+    grid.highlights = transformHighlights(grid, transformed, kind);
     grid.text = transformed.text;
     grid.cols = transformed.columns;
     fitGridCardToContent(grid);
     grid.selected.clear();
     renderAll();
-    commitHistory(historyBefore, `${kind === "transpose" ? "transpose" : "rotate"} ${grid.name}`);
-    toast(`${kind === "transpose" ? "Transposed" : "Rotated"} ${grid.name}${detachedSynchronizedView ? " · synchronized link detached" : ""}`);
+    const verb = kind === "transpose" ? "transpose" : kind === "mirror" ? "mirror" : "rotate";
+    const pastTense = kind === "transpose" ? "Transposed" : kind === "mirror" ? "Mirrored" : "Rotated";
+    commitHistory(historyBefore, `${verb} ${grid.name}`);
+    toast(`${pastTense} ${grid.name}${detachedSynchronizedView ? " · synchronized link detached" : ""}`);
   }
 
   function updateInspector() {
@@ -1192,6 +1221,8 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     $("#gridColumns").value = grid?.cols || "";
     $("#cellSize").value = grid?.cellSize || "";
     $("#gridText").value = grid?.text || "";
+    const canColour = Boolean(grid && [...grid.selected].some(index => grid.text[index] && grid.text[index] !== " "));
+    $$(".letter-colour-button").forEach(button => { button.disabled = !canColour; });
     updateAlphabetPreview();
     updateAnalysis();
   }
@@ -1522,10 +1553,56 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     commitHistory(historyBefore, `paste into ${grid.name}`);
   }
 
+  function shiftHighlightsForEdit(grid, index, mode) {
+    if (mode === "replace") return;
+    const next = {};
+    Object.entries(grid.highlights || {}).forEach(([rawIndex, colour]) => {
+      const oldIndex = Number(rawIndex);
+      if (mode === "delete" && oldIndex === index) return;
+      if (mode === "before" && oldIndex >= index) next[oldIndex + 1] = colour;
+      else if (mode === "after" && oldIndex > index) next[oldIndex + 1] = colour;
+      else if (mode === "delete" && oldIndex > index) next[oldIndex - 1] = colour;
+      else next[oldIndex] = colour;
+    });
+    grid.highlights = next;
+  }
+
+  function shiftHighlightsForDeletions(grid, deletedIndices) {
+    const deleted = new Set(deletedIndices);
+    const ascending = [...deleted].sort((a, b) => a - b);
+    const next = {};
+    Object.entries(grid.highlights || {}).forEach(([rawIndex, colour]) => {
+      const oldIndex = Number(rawIndex);
+      if (deleted.has(oldIndex)) return;
+      const shift = ascending.filter(index => index < oldIndex).length;
+      next[oldIndex - shift] = colour;
+    });
+    grid.highlights = next;
+  }
+
+  function colourSelectedLetters(colour) {
+    const grid = currentGrid();
+    if (!grid) return;
+    const indices = [...grid.selected].filter(index => grid.text[index] && grid.text[index] !== " ");
+    if (!indices.length) return toast("Select one or more letters first");
+    const before = captureSnapshot();
+    const highlights = { ...(grid.highlights || {}) };
+    indices.forEach(index => {
+      if (colour === "clear") delete highlights[index];
+      else highlights[index] = colour;
+    });
+    grid.highlights = highlights;
+    renderAll();
+    const action = colour === "clear" ? "clear colour from" : `colour ${colour}`;
+    commitHistory(before, `${action} ${indices.length} letters in ${grid.name}`);
+    toast(colour === "clear" ? `Cleared colour from ${indices.length} letter${indices.length === 1 ? "" : "s"}` : `Coloured ${indices.length} letter${indices.length === 1 ? "" : "s"} ${colour}`);
+  }
+
   function editLetterAt(grid, index, mode) {
     const before = captureSnapshot();
     const targetGrid = synchronizedRoot(grid);
     targetGrid.derived = null;
+    synchronizedGroup(targetGrid).forEach(item => shiftHighlightsForEdit(item, index, mode));
     const characters = [...targetGrid.text];
     if (mode === "replace") characters[index] = "?";
     if (mode === "before") characters.splice(index, 0, "?");
@@ -1547,6 +1624,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     const targetGrid = synchronizedRoot(grid);
     targetGrid.derived = null;
     const selectedIndices = [...grid.selected].sort((a, b) => b - a);
+    synchronizedGroup(targetGrid).forEach(item => shiftHighlightsForDeletions(item, selectedIndices));
     const characters = [...targetGrid.text];
     selectedIndices.forEach(index => {
       if (index >= 0 && index < characters.length) characters.splice(index, 1);
@@ -1599,7 +1677,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       const raw = localStorage.getItem("kryptos-sandbox-snapshot");
       if (!raw) return false;
       const snapshot = JSON.parse(raw);
-      state.grids = snapshot.grids.map(grid => ({ ...grid, selected: new Set(grid.selected || []) }));
+      state.grids = snapshot.grids.map(grid => ({ ...grid, highlights: { ...(grid.highlights || {}) }, selected: new Set(grid.selected || []) }));
       state.overlays = snapshot.overlays || [];
       state.alphabet = snapshot.alphabet || KRYPTOS_ALPHABET;
       state.cellSize = snapshot.cellSize || 28;
@@ -1628,6 +1706,8 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     $("#rotateLeft").addEventListener("click", () => transformGrid("left"));
     $("#rotateRight").addEventListener("click", () => transformGrid("right"));
     $("#transpose").addEventListener("click", () => transformGrid("transpose"));
+    $("#mirrorGrid").addEventListener("click", () => transformGrid("mirror"));
+    $$(".letter-colour-button").forEach(button => button.addEventListener("click", () => colourSelectedLetters(button.dataset.letterColour)));
 
     $$(".tool-button[data-mode]").forEach(button => button.addEventListener("click", () => {
       state.tool = button.dataset.mode;
@@ -1700,6 +1780,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
           { icon: "⇄", label: "Create synchronized view…", action: createSynchronizedView },
           { icon: "↷", label: "Rotate clockwise", action: () => transformGrid("right") },
           { icon: "⤢", label: "Transpose", action: () => transformGrid("transpose") },
+          { icon: "⇆", label: "Mirror left ↔ right", action: () => transformGrid("mirror") },
           { separator: true },
           { icon: "⌫", label: "Delete grid", danger: true, action: deleteGrid },
         );
@@ -1959,6 +2040,8 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     $$(".clip-row").forEach(row => row.addEventListener("click", () => addGrid(row.dataset.clip, "Clipboard fragment")));
     $$(".import-row").forEach(row => row.addEventListener("click", () => {
       const type = row.dataset.import;
+      if (type === "left-plate") addGrid(KRYPTOS_LEFT_PLATE, "Kryptos left plate · ciphertext", { cols: KRYPTOS_LEFT_PLATE_COLUMNS, preserveSparse: true, fitContent: true });
+      if (type === "right-plate") addGrid(KRYPTOS_RIGHT_PLATE, "Kryptos right plate · Vigenère tableau", { cols: KRYPTOS_RIGHT_PLATE_COLUMNS, preserveSparse: true, fitContent: true });
       if (type === "k1") addGrid(K1_CIPHERTEXT, "K1 ciphertext", { cols: 21, width: 648, height: 205 });
       if (type === "k2") addGrid(K2_CIPHERTEXT, "K2 ciphertext", { cols: 31, width: 948, height: 415 });
       if (type === "k3") addGrid(K3_CIPHERTEXT, "K3 ciphertext", { cols: 21, width: 648, height: 535 });

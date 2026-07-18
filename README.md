@@ -20,7 +20,8 @@ The development server disables caching and enables automatic source-file reload
 - Type with cells selected to overwrite them one-by-one from left to right, top to bottom.
 - Copy a whole grid as row-preserving plain text, copy a cell selection in its traversal order, and paste directly into a selected grid or cell range.
 - Paste plain text onto an unselected board to create a content-fitted grid, preserving rectangular line widths or choosing a balanced layout automatically.
-- Rotate, transpose, duplicate, delete, paste into, and copy from grids.
+- Rotate, transpose, mirror left-to-right, duplicate, delete, paste into, and copy from grids.
+- Colour selected letters amber, blue, coral, or green, clear colours independently, and preserve annotations through saves, edits, duplication, and matrix transforms.
 - Preview Vigenère results directly on intersecting cells while dragging, then drop to create a live result linked to both source grids.
 - Switch between the Kryptos keyed alphabet, A–Z, or a custom alphabet.
 - Analyse a selection or full grid using frequency similarity, index of coincidence, bigrams, and simulated uniform-random null likelihoods.
@@ -29,7 +30,8 @@ The development server disables caching and enables automatic source-file reload
 - Materialize the winning layered route as an intermediate pre-Vigenère grid whose column count equals the detected key length.
 - Automatically persist workspace folders, grids, preferences, and undo history in browser local storage.
 - Undo and redo up to 100 document changes using the toolbar or standard keyboard shortcuts.
-- Import K1–K4, either known K4 crib independently, or a matching 7×14 positional mask with low-opacity `?` unknown slots from the left sidebar.
+- Import the complete courtyard-oriented Kryptos left ciphertext plate or right keyed-Vigenère tableau with their irregular rows preserved.
+- Import K1–K4, either known K4 crib independently, or a matching 7×14 positional mask with visible `?` unknown slots from the left sidebar.
 - Start from populated K1, K2, and K3 solution workspaces containing aligned ciphertext and known plaintext grids.
 - Import the Kryptos keyed alphabet or a random cleaned passage of roughly 100 letters from a public-domain book.
 - Repeat a selected grid/cell sequence N times from the toolbar's inline Clone extend slider.

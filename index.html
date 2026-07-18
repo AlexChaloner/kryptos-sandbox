@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=4" />
+    <link rel="stylesheet" href="styles.css?v=5" />
   </head>
   <body>
     <div class="app-shell">
@@ -60,6 +60,8 @@
           <div class="sidebar-spacer"></div>
           <div class="quick-imports">
             <span class="eyebrow">QUICK IMPORTS</span>
+            <button class="import-row" data-import="left-plate"><span class="import-icon amber">LP</span><span><strong>Kryptos left plate</strong><small>Ciphertext · 869 glyphs</small></span><b>＋</b></button>
+            <button class="import-row" data-import="right-plate"><span class="import-icon blue">RP</span><span><strong>Kryptos right plate</strong><small>Keyed Vigenère tableau</small></span><b>＋</b></button>
             <button class="import-row" data-import="k1"><span class="import-icon amber">K1</span><span><strong>K1 ciphertext</strong><small>63 letters · 3 × 21 layout</small></span><b>＋</b></button>
             <button class="import-row" data-import="k2"><span class="import-icon amber">K2</span><span><strong>K2 ciphertext</strong><small>372 positions · 12 × 31 layout</small></span><b>＋</b></button>
             <button class="import-row" data-import="k3"><span class="import-icon amber">K3</span><span><strong>K3 ciphertext</strong><small>336 letters · 16 × 21 layout</small></span><b>＋</b></button>
@@ -95,6 +97,7 @@
               <button class="tool-button icon-only" id="rotateLeft" title="Rotate selected left">↶</button>
               <button class="tool-button icon-only" id="rotateRight" title="Rotate selected right">↷</button>
               <button class="tool-button icon-only" id="transpose" title="Transpose selected">⤢</button>
+              <button class="tool-button icon-only" id="mirrorGrid" title="Mirror selected left to right">⇆</button>
               <button class="tool-button icon-only" id="duplicateGrid" title="Duplicate selected">⧉</button>
               <div class="clone-extend-control">
                 <button class="tool-button" id="cloneExtend" title="Repeat the selected letters or grid N times"><span>×N</span> Clone extend</button>
@@ -147,6 +150,18 @@
               <div class="mini-actions">
                 <button id="pasteText">Paste</button><button id="copyText">Copy</button><button id="applyText" class="accent">Apply</button>
               </div>
+            </section>
+
+            <section class="inspector-section letter-colour-section">
+              <div class="section-title"><span>LETTER COLOUR</span><button class="collapse" type="button" aria-label="Collapse Letter colour section" aria-expanded="true">⌃</button></div>
+              <div class="letter-colour-palette" aria-label="Colour selected letters">
+                <button type="button" class="letter-colour-button amber" data-letter-colour="amber" aria-label="Colour selected letters amber" title="Amber" disabled></button>
+                <button type="button" class="letter-colour-button blue" data-letter-colour="blue" aria-label="Colour selected letters blue" title="Blue" disabled></button>
+                <button type="button" class="letter-colour-button coral" data-letter-colour="coral" aria-label="Colour selected letters coral" title="Coral" disabled></button>
+                <button type="button" class="letter-colour-button green" data-letter-colour="green" aria-label="Colour selected letters green" title="Green" disabled></button>
+                <button type="button" class="letter-colour-button clear" data-letter-colour="clear" aria-label="Clear colour from selected letters" title="Clear colour" disabled>×</button>
+              </div>
+              <p class="letter-colour-help">Select letters in a grid, then choose a colour.</p>
             </section>
 
             <section class="inspector-section">
@@ -293,6 +308,6 @@
         </div>
       </div>
     </div>
-    <script type="module" src="app.js?v=6"></script>
+    <script type="module" src="app.js?v=7"></script>
   </body>
 </html>

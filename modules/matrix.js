@@ -13,9 +13,22 @@ export function transformSparseText(text, columns, kind) {
   if (kind === "right") transformed = matrix[0].map((_, column) => matrix.map(row => row[column]).reverse());
   if (kind === "left") transformed = matrix[0].map((_, column) => matrix.map(row => row[row.length - 1 - column]));
   if (kind === "transpose") transformed = matrix[0].map((_, column) => matrix.map(row => row[column]));
+  if (kind === "mirror") transformed = matrix.map(row => [...row].reverse());
 
+  const serialized = transformed.flat().map(value => value ?? " ").join("");
   return {
-    text: transformed.flat().map(value => value ?? " ").join(""),
-    columns: rowCount,
+    text: kind === "mirror" ? serialized.replace(/ +$/, "") : serialized,
+    columns: kind === "mirror" ? columns : rowCount,
   };
+}
+
+export function transformSparseIndex(index, textLength, columns, kind) {
+  const rows = Math.ceil(textLength / columns);
+  const row = Math.floor(index / columns);
+  const column = index % columns;
+  if (kind === "right") return column * rows + (rows - 1 - row);
+  if (kind === "left") return (columns - 1 - column) * rows + row;
+  if (kind === "transpose") return column * rows + row;
+  if (kind === "mirror") return row * columns + (columns - 1 - column);
+  return index;
 }
