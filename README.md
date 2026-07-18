@@ -22,7 +22,7 @@ The development server disables caching and enables automatic source-file reload
 - Paste plain text onto an unselected board to create a content-fitted grid, preserving rectangular line widths or choosing a balanced layout automatically.
 - Rotate, transpose, reflect left-to-right or top-to-bottom, duplicate, delete, paste into, and copy from grids.
 - Colour selected letters amber, blue, coral, or green, clear colours independently, and preserve annotations through saves, edits, duplication, and matrix transforms.
-- Preview Vigenère results directly on intersecting cells while dragging, then materialize the exact sparse row/column alignment as a result linked to both source grids.
+- Preview Vigenère results directly on intersecting cells while dragging, then materialize the physically aligned letter pairs as a compact, blank-free result linked to both source grids.
 - Switch between the Kryptos keyed alphabet, A–Z, or a custom alphabet.
 - Analyse a selection or full grid using frequency similarity, index of coincidence, bigrams, and simulated uniform-random null likelihoods.
 - Scan candidate Vigenère key lengths using average vertical-column IC with exact uniform-null standard errors, sample-size-adjusted z-scores, approximate p-values, and 95% null bands; inspect each column, infer frequency-based key letters under the active alphabet, and preview candidate decryptions.

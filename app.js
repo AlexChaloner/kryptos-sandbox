@@ -3,7 +3,7 @@ import {
   K1_PLAINTEXT, K2_PLAINTEXT, K3_PLAINTEXT,
   KRYPTOS_LEFT_PLATE, KRYPTOS_LEFT_PLATE_COLUMNS, KRYPTOS_RIGHT_PLATE, KRYPTOS_RIGHT_PLATE_COLUMNS,
   cleanText, cleanUnique, positionalK4Cribs, randomEnglishBookSample, combineAlignedCipherText, combineCipherLetters, combineCipherText,
-} from "./modules/cipher.js?v=5";
+} from "./modules/cipher.js?v=6";
 import {
   letterCounts, indexOfCoincidence, frequencySimilarity, estimateNulls, formatPercent,
   scanVigenerePeriods, suggestVigenereKey, decryptVigenere, coincidenceSignificance, formatPValue,
@@ -957,7 +957,9 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       rowOffset: link.rowOffset,
       columnOffset: link.columnOffset,
     };
-    return { ...combineAlignedCipherText(operandA, operandB, operation, state.alphabet, alignment), alignment };
+    const combined = combineAlignedCipherText(operandA, operandB, operation, state.alphabet, alignment);
+    alignment.columns = combined.overlapColumns;
+    return { ...combined, text: combined.compactText, columns: combined.overlapColumns, alignment };
   }
 
   function refreshDerivedGrids() {
@@ -968,8 +970,9 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       if (!base || !overlay) return;
       if (grid.derived.alignment) {
         const combined = combineAlignedCipherText(base, overlay, grid.derived.operation, state.alphabet, grid.derived.alignment);
-        grid.text = combined.text;
-        grid.cols = combined.columns;
+        grid.text = combined.compactText;
+        grid.cols = grid.derived.alignment.columns || combined.overlapColumns;
+        grid.derived.alignment.columns ||= combined.overlapColumns;
       } else {
         grid.text = combinedText(base, overlay, grid.derived.operation);
         grid.cols = Math.min(base.cols, overlay.cols);
@@ -1079,8 +1082,9 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       ? alignedCombination(base, overlay, link, operation)
       : { text: combinedText(base, overlay, operation), columns: Math.min(base.cols, overlay.cols), alignedCount: Math.min(base.text.length, overlay.text.length), alignment: null };
     const layoutGrid = link ? (combined.alignment.topOperand === "a" ? base : overlay) : null;
-    const resultWidth = link ? layoutGrid.width : Math.max(220, Math.min(base.width, overlay.width));
-    const resultHeight = link ? layoutGrid.height : Math.max(150, Math.min(base.height, overlay.height));
+    const resultWidth = link ? gridWidthForColumns(layoutGrid, combined.columns) : Math.max(220, Math.min(base.width, overlay.width));
+    const resultRows = Math.max(1, Math.ceil(combined.text.length / combined.columns));
+    const resultHeight = link ? gridMinimumHeightForRows(layoutGrid, resultRows) : Math.max(150, Math.min(base.height, overlay.height));
     const resultPosition = positionInsideViewport(
       resultWidth,
       resultHeight,
@@ -1104,7 +1108,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     state.selectedGridIds = [result.id];
     renderAll();
     $(`.grid-card[data-id="${result.id}"]`, workspace)?.classList.add("combine-flash");
-    setStatus(`${link ? "Materialized" : "Combined"} ${combined.alignedCount} aligned cells: ${definition.label}`);
+    setStatus(`${link ? "Materialized" : "Combined"} ${combined.combinedCount ?? combined.alignedCount} letters: ${definition.label}`);
     toast(`Created ${result.name}`);
   }
 
@@ -1304,7 +1308,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     $("#operandB").textContent = operands[1]?.name || "Select second grid";
     $("#runGridOperation").disabled = operands.length !== 2;
     $("#runGridOperation").textContent = overlayLinkForOperands(operands[0], operands[1])
-      ? "Create grid from live overlay"
+      ? "Create compact grid from live overlay"
       : "Create live result from A and B";
     const controls = [$("#gridName"), $("#gridColumns"), $("#cellSize"), $("#gridText")];
     controls.forEach(control => control.disabled = !grid);

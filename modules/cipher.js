@@ -133,6 +133,7 @@ export function combineAlignedCipherText(operandA, operandB, operation, alphabet
   const base = topIsA ? operandB : operandA;
   const baseRows = Math.ceil(base.text.length / base.cols);
   let text = "";
+  let compactText = "";
   let alignedCount = 0;
   for (let topIndex = 0; topIndex < top.text.length; topIndex++) {
     const baseRow = Math.floor(topIndex / top.cols) + alignment.rowOffset;
@@ -145,7 +146,12 @@ export function combineAlignedCipherText(operandA, operandB, operation, alphabet
     alignedCount++;
     const a = topIsA ? top.text[topIndex] : base.text[baseIndex];
     const b = topIsA ? base.text[baseIndex] : top.text[topIndex];
-    text += combineCipherLetters(a, b, operation, alphabet);
+    const combined = combineCipherLetters(a, b, operation, alphabet);
+    text += combined;
+    if (combined !== " ") compactText += combined;
   }
-  return { text, columns: top.cols, alignedCount };
+  const firstAlignedColumn = Math.max(0, -alignment.columnOffset);
+  const lastAlignedColumn = Math.min(top.cols, base.cols - alignment.columnOffset);
+  const overlapColumns = Math.max(1, lastAlignedColumn - firstAlignedColumn);
+  return { text, compactText, columns: top.cols, overlapColumns, alignedCount, combinedCount: compactText.length };
 }
