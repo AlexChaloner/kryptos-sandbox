@@ -46,3 +46,9 @@ test("approved canvas hotkeys are scoped and documented", () => {
   assert.match(html, /⌘\/Ctrl \+ A/);
   assert.match(html, /Shift \+ Arrow/);
 });
+
+test("quick imports include a fresh K4-length uniform random grid", () => {
+  assert.match(html, /data-import="random-letters"/);
+  assert.match(app, /randomLetters\(97\)/);
+  assert.match(app, /Uniform random · 97 letters/);
+});

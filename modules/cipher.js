@@ -89,6 +89,11 @@ export function randomEnglishBookSample() {
   return ENGLISH_BOOK_SAMPLES[Math.floor(Math.random() * ENGLISH_BOOK_SAMPLES.length)];
 }
 
+export function randomLetters(length = 97, random = Math.random) {
+  const size = Math.max(0, Math.floor(Number(length) || 0));
+  return Array.from({ length: size }, () => NORMAL_ALPHABET[Math.min(25, Math.floor(random() * 26))]).join("");
+}
+
 export const GRID_OPERATIONS = {
   add: { symbol: "⊕", label: "add A + B", calculate: (a, b, length) => (a + b) % length },
   subtract: { symbol: "−", label: "subtract A − B", calculate: (a, b, length) => (a - b + length) % length },

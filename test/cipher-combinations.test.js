@@ -7,7 +7,16 @@ import {
   combineAlignedCipherText,
   combineCipherLetters,
   combineCipherText,
+  randomLetters,
 } from "../modules/cipher.js";
+
+test("uniform random import produces only the requested number of A-Z letters", () => {
+  assert.equal(randomLetters(4, () => 0), "AAAA");
+  assert.equal(randomLetters(3, () => 0.999999), "ZZZ");
+  const sample = randomLetters(97, () => 0.5);
+  assert.equal(sample.length, 97);
+  assert.match(sample, /^[A-Z]{97}$/);
+});
 
 test("single-cell addition and both subtraction directions obey A/B labels", () => {
   assert.equal(combineCipherLetters("C", "F", "add", NORMAL_ALPHABET), "H");

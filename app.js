@@ -2,7 +2,7 @@ import {
   KRYPTOS_ALPHABET, NORMAL_ALPHABET, K1_CIPHERTEXT, K2_CIPHERTEXT, K3_CIPHERTEXT, K4_CIPHERTEXT, GRID_OPERATIONS,
   K1_PLAINTEXT, K2_PLAINTEXT, K3_PLAINTEXT,
   KRYPTOS_LEFT_PLATE, KRYPTOS_LEFT_PLATE_COLUMNS, KRYPTOS_RIGHT_PLATE, KRYPTOS_RIGHT_PLATE_COLUMNS,
-  cleanText, cleanUnique, positionalK4Cribs, randomEnglishBookSample, combineAlignedCipherText, combineCipherText,
+  cleanText, cleanUnique, positionalK4Cribs, randomEnglishBookSample, randomLetters, combineAlignedCipherText, combineCipherText,
 } from "./modules/cipher.js?v=7";
 import {
   alignmentFromCellGeometry, compactSparseLayout, createOverlayLink, findOverlayLink, normalizeOverlayLinks,
@@ -2455,6 +2455,7 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
         const sample = randomEnglishBookSample();
         addGrid(sample.text, `English · ${sample.title}`, { cols: 10, width: 330, height: 395 });
       }
+      if (type === "random-letters") addGrid(randomLetters(97), "Uniform random · 97 letters", { cols: 14, width: 445, height: 280 });
       if (type === "alphabet") addGrid(KRYPTOS_ALPHABET, "Kryptos alphabet", { cols: 13, width: 415, height: 145 });
       if (type === "crib-east") addGrid("EASTNORTHEAST", "K4 crib · EASTNORTHEAST", { cols: 13, width: 420, height: 115 });
       if (type === "crib-berlin") addGrid("BERLINCLOCK", "K4 crib · BERLINCLOCK", { cols: 11, width: 355, height: 115 });
