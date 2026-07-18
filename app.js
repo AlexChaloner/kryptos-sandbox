@@ -9,7 +9,7 @@ import {
   scanVigenerePeriods, suggestVigenereKey, decryptVigenere, coincidenceSignificance, formatPValue,
 } from "./modules/analysis.js";
 import { uniqueId, clamp, escapeHtml } from "./modules/utils.js";
-import { transformSparseIndex, transformSparseText } from "./modules/matrix.js?v=2";
+import { transformSparseIndex, transformSparseText } from "./modules/matrix.js?v=3";
 import { createContextMenuController } from "./modules/context-menu.js";
 import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition-analysis.js";
 
@@ -29,6 +29,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
   let strideScanTimer = null;
   let strideLastSignature = "";
   let libraryEditorCommit = null;
+  let liveOverlayPreviewSignature = "";
   const STARTER_LIBRARY_VERSION = 1;
   const LETTER_COLOURS = new Set(["amber", "blue", "coral", "green"]);
 
@@ -701,7 +702,8 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     card.classList.add("dragging");
     card.setPointerCapture?.(event.pointerId);
 
-    const updatePosition = (clientX, clientY) => {
+    let dragFrame = null;
+    const updatePosition = (clientX, clientY, preview = true) => {
       const scale = state.zoom;
       const scrollDeltaX = workspace.scrollLeft - start.scrollLeft;
       const scrollDeltaY = workspace.scrollTop - start.scrollTop;
@@ -710,25 +712,40 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       card.style.left = `${grid.x}px`;
       card.style.top = `${grid.y}px`;
       updateWorkspaceExtent();
+      if (!preview) return;
       const target = findOverlapTarget(grid, card, true);
       $$(".grid-card.preview-a, .grid-card.preview-b, .grid-card.drop-target", workspace).forEach(element => element.classList.remove("preview-a", "preview-b", "drop-target"));
       card.classList.add("preview-a");
       if (target) $(`.grid-card[data-id="${target.id}"]`, workspace)?.classList.add("preview-b");
       renderLiveOverlay(target, grid, card);
     };
+    const schedulePositionUpdate = () => {
+      if (dragFrame !== null) return;
+      dragFrame = requestAnimationFrame(() => {
+        dragFrame = null;
+        updatePosition(latestPointer.clientX, latestPointer.clientY);
+      });
+    };
     const move = moveEvent => {
       latestPointer = { clientX: moveEvent.clientX, clientY: moveEvent.clientY };
-      updatePosition(latestPointer.clientX, latestPointer.clientY);
+      schedulePositionUpdate();
     };
-    const scroll = () => updatePosition(latestPointer.clientX, latestPointer.clientY);
-    const end = () => {
+    const scroll = schedulePositionUpdate;
+    const end = endEvent => {
       document.removeEventListener("pointermove", move);
       document.removeEventListener("pointerup", end);
+      document.removeEventListener("pointercancel", end);
       workspace.removeEventListener("scroll", scroll);
+      if (dragFrame !== null) cancelAnimationFrame(dragFrame);
+      dragFrame = null;
+      if (Number.isFinite(endEvent?.clientX) && Number.isFinite(endEvent?.clientY)) {
+        latestPointer = { clientX: endEvent.clientX, clientY: endEvent.clientY };
+      }
+      updatePosition(latestPointer.clientX, latestPointer.clientY, false);
       card.classList.remove("dragging");
       $$(".grid-card.preview-a, .grid-card.preview-b, .grid-card.drop-target", workspace).forEach(element => element.classList.remove("preview-a", "preview-b", "drop-target"));
       clearLiveOverlay();
-      const target = findOverlapTarget(grid, card);
+      const target = endEvent?.type === "pointercancel" ? null : findOverlapTarget(grid, card);
       state.moving = null;
       if (target && $("#snapCombine").checked) {
         activateLiveOverlay(target, grid);
@@ -737,12 +754,14 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
         const overlayCount = state.overlays.length;
         state.overlays = state.overlays.filter(overlay => overlay.overlayId !== grid.id);
         if (overlayCount !== state.overlays.length) renderAll();
+        else renderPersistentOverlays();
         commitHistory(historyBefore, `move ${grid.name}`);
         setStatus(`Moved ${grid.name}`);
       }
     };
     document.addEventListener("pointermove", move);
     document.addEventListener("pointerup", end, { once: true });
+    document.addEventListener("pointercancel", end, { once: true });
     workspace.addEventListener("scroll", scroll, { passive: true });
   }
 
@@ -765,6 +784,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
   }
 
   function clearLiveOverlay() {
+    liveOverlayPreviewSignature = "";
     $$(".letter-cell.live-overlay", workspace).forEach(cell => {
       cell.classList.remove("live-overlay");
       delete cell.dataset.liveLetter;
@@ -784,25 +804,65 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
   }
 
   function renderLiveOverlay(base, overlay, overlayCard) {
-    clearLiveOverlay();
-    if (!base) return;
+    if (!base) {
+      if (liveOverlayPreviewSignature) clearLiveOverlay();
+      return;
+    }
     const baseCard = $(`.grid-card[data-id="${base.id}"]`, workspace);
-    if (!baseCard) return;
-    const baseCells = $$(".letter-cell", baseCard).map((cell, index) => ({ cell, index, rect: cell.getBoundingClientRect() }));
+    if (!baseCard) return clearLiveOverlay();
+    const baseFirstCell = $(".letter-cell", baseCard);
+    const overlayFirstCell = $(".letter-cell", overlayCard);
+    if (!baseFirstCell || !overlayFirstCell) return clearLiveOverlay();
+    const baseFirstRect = baseFirstCell.getBoundingClientRect();
+    const overlayFirstRect = overlayFirstCell.getBoundingClientRect();
+    const strideX = baseFirstRect.width + 2 * state.zoom;
+    const strideY = baseFirstRect.height + 2 * state.zoom;
+    const deltaX = overlayFirstRect.left - baseFirstRect.left;
+    const deltaY = overlayFirstRect.top - baseFirstRect.top;
+    const minimumCellArea = Math.min(
+      baseFirstRect.width * baseFirstRect.height,
+      overlayFirstRect.width * overlayFirstRect.height,
+    );
+    const columnOffsets = [...new Set([Math.floor(deltaX / strideX), Math.ceil(deltaX / strideX)])];
+    const rowOffsets = [...new Set([Math.floor(deltaY / strideY), Math.ceil(deltaY / strideY)])];
+    const alignmentCandidates = rowOffsets.flatMap(rowOffset => columnOffsets.map(columnOffset => {
+      const residualX = deltaX - columnOffset * strideX;
+      const residualY = deltaY - rowOffset * strideY;
+      const overlapWidth = Math.max(0,
+        Math.min(baseFirstRect.width, residualX + overlayFirstRect.width) - Math.max(0, residualX),
+      );
+      const overlapHeight = Math.max(0,
+        Math.min(baseFirstRect.height, residualY + overlayFirstRect.height) - Math.max(0, residualY),
+      );
+      return { rowOffset, columnOffset, area: overlapWidth * overlapHeight };
+    })).filter(candidate => candidate.area >= minimumCellArea * .35).sort((a, b) => b.area - a.area);
+    if (!alignmentCandidates.length) {
+      if (liveOverlayPreviewSignature) clearLiveOverlay();
+      return;
+    }
+    const operation = $("#combineOperation").value;
+    const signature = `${base.id}:${overlay.id}:${deltaX.toFixed(2)}:${deltaY.toFixed(2)}:${operation}`;
+    if (signature === liveOverlayPreviewSignature) return;
+    clearLiveOverlay();
+    liveOverlayPreviewSignature = signature;
+    const baseRows = Math.ceil(base.text.length / base.cols);
     const overlayCells = $$(".letter-cell", overlayCard);
     overlayCells.forEach((cell, overlayIndex) => {
-      const movingRect = cell.getBoundingClientRect();
-      let best = null, bestArea = 0;
-      baseCells.forEach(candidate => {
-        const width = Math.max(0, Math.min(movingRect.right, candidate.rect.right) - Math.max(movingRect.left, candidate.rect.left));
-        const height = Math.max(0, Math.min(movingRect.bottom, candidate.rect.bottom) - Math.max(movingRect.top, candidate.rect.top));
-        const area = width * height;
-        if (area > bestArea) { best = candidate; bestArea = area; }
-      });
-      if (!best || bestArea < Math.min(movingRect.width * movingRect.height, best.rect.width * best.rect.height) * .35) return;
-      const operation = $("#combineOperation").value;
+      const overlayRow = Math.floor(overlayIndex / overlay.cols);
+      const overlayColumn = overlayIndex % overlay.cols;
+      let baseIndex = -1;
+      for (const candidate of alignmentCandidates) {
+        const baseRow = overlayRow + candidate.rowOffset;
+        const baseColumn = overlayColumn + candidate.columnOffset;
+        const candidateIndex = baseRow * base.cols + baseColumn;
+        if (baseRow >= 0 && baseRow < baseRows && baseColumn >= 0 && baseColumn < base.cols && candidateIndex >= 0 && candidateIndex < base.text.length) {
+          baseIndex = candidateIndex;
+          break;
+        }
+      }
+      if (baseIndex < 0) return;
       const a = overlay.text[overlayIndex];
-      const b = base.text[best.index];
+      const b = base.text[baseIndex];
       const letter = combineLetters(a, b, operation);
       const presentation = operationPresentation(a, b, operation, letter);
       cell.dataset.liveLetter = letter;
@@ -1202,8 +1262,8 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     fitGridCardToContent(grid);
     grid.selected.clear();
     renderAll();
-    const verb = kind === "transpose" ? "transpose" : kind === "mirror" ? "mirror" : "rotate";
-    const pastTense = kind === "transpose" ? "Transposed" : kind === "mirror" ? "Mirrored" : "Rotated";
+    const verb = kind === "transpose" ? "transpose" : kind === "mirror" ? "mirror" : kind === "reflectVertical" ? "reflect vertically" : "rotate";
+    const pastTense = kind === "transpose" ? "Transposed" : kind === "mirror" ? "Mirrored" : kind === "reflectVertical" ? "Reflected vertically" : "Rotated";
     commitHistory(historyBefore, `${verb} ${grid.name}`);
     toast(`${pastTense} ${grid.name}${detachedSynchronizedView ? " · synchronized link detached" : ""}`);
   }
@@ -1707,6 +1767,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     $("#rotateRight").addEventListener("click", () => transformGrid("right"));
     $("#transpose").addEventListener("click", () => transformGrid("transpose"));
     $("#mirrorGrid").addEventListener("click", () => transformGrid("mirror"));
+    $("#reflectVertical").addEventListener("click", () => transformGrid("reflectVertical"));
     $$(".letter-colour-button").forEach(button => button.addEventListener("click", () => colourSelectedLetters(button.dataset.letterColour)));
 
     $$(".tool-button[data-mode]").forEach(button => button.addEventListener("click", () => {
@@ -1781,6 +1842,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
           { icon: "↷", label: "Rotate clockwise", action: () => transformGrid("right") },
           { icon: "⤢", label: "Transpose", action: () => transformGrid("transpose") },
           { icon: "⇆", label: "Mirror left ↔ right", action: () => transformGrid("mirror") },
+          { icon: "⇅", label: "Reflect top ↔ bottom", action: () => transformGrid("reflectVertical") },
           { separator: true },
           { icon: "⌫", label: "Delete grid", danger: true, action: deleteGrid },
         );

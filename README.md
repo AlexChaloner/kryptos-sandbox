@@ -20,7 +20,7 @@ The development server disables caching and enables automatic source-file reload
 - Type with cells selected to overwrite them one-by-one from left to right, top to bottom.
 - Copy a whole grid as row-preserving plain text, copy a cell selection in its traversal order, and paste directly into a selected grid or cell range.
 - Paste plain text onto an unselected board to create a content-fitted grid, preserving rectangular line widths or choosing a balanced layout automatically.
-- Rotate, transpose, mirror left-to-right, duplicate, delete, paste into, and copy from grids.
+- Rotate, transpose, reflect left-to-right or top-to-bottom, duplicate, delete, paste into, and copy from grids.
 - Colour selected letters amber, blue, coral, or green, clear colours independently, and preserve annotations through saves, edits, duplication, and matrix transforms.
 - Preview Vigenère results directly on intersecting cells while dragging, then drop to create a live result linked to both source grids.
 - Switch between the Kryptos keyed alphabet, A–Z, or a custom alphabet.

@@ -156,7 +156,7 @@ kbd { font: 9px "DM Mono", monospace; color: #bab9ae; border: 1px solid #4a4a44;
 .empty-state strong { font-size: 13px; color: var(--muted); }
 .empty-state small { margin-top: 5px; }
 
-.grid-card { position: absolute; background: #1b1b18; border: 1px solid #41413a; border-radius: 4px; overflow: hidden; box-shadow: 0 12px 34px rgba(0,0,0,.28); transform-origin: top left; }
+.grid-card { position: absolute; contain: layout style; background: #1b1b18; border: 1px solid #41413a; border-radius: 4px; overflow: hidden; box-shadow: 0 12px 34px rgba(0,0,0,.28); transform-origin: top left; }
 .grid-resize-handle { position: absolute; right: 0; bottom: 0; width: 20px; height: 20px; cursor: nwse-resize; touch-action: none; z-index: 8; }
 .grid-resize-handle::after { content: ""; position: absolute; right: 4px; bottom: 4px; width: 8px; height: 8px; border-right: 2px solid #777568; border-bottom: 2px solid #777568; opacity: .8; }
 .grid-card.resizing { user-select: none; box-shadow: 0 0 0 1px #7b6137, 0 12px 34px rgba(0,0,0,.34); }
@@ -168,7 +168,7 @@ kbd { font: 9px "DM Mono", monospace; color: #bab9ae; border: 1px solid #4a4a44;
 .grid-card.selected[data-operand="B"] { border-color: #568ca1; box-shadow: 0 0 0 1px rgba(104,169,194,.2), 0 15px 36px rgba(0,0,0,.38); }
 .grid-card.selected[data-operand="B"]::before { background: var(--blue); color: #102128; }
 .grid-card.primary { box-shadow: 0 0 0 2px rgba(244,196,110,.28), 0 15px 36px rgba(0,0,0,.38); }
-.grid-card.dragging { opacity: .88; z-index: 1000 !important; cursor: grabbing; }
+.grid-card.dragging { opacity: .88; z-index: 1000 !important; cursor: grabbing; will-change: left, top; }
 .grid-card.overlay-top { background: rgba(27, 27, 24, .78); }
 .grid-card.overlay-top .letter-cell { background-color: rgba(36, 36, 32, .78); }
 .grid-card.overlay-top .letter-cell.selected { background-color: rgba(141, 105, 46, .82); }
@@ -394,10 +394,18 @@ input:disabled, textarea:disabled { opacity: .45; cursor: not-allowed; }
 
 @media (max-width: 1500px) {
   .toolbar-hint { display: none; }
+  #cloneExtend { width: 38px; padding: 0; font-size: 0; }
+  #cloneExtend span { margin: 0; font-size: 12px; }
+}
+
+@media (max-width: 1300px) {
+  .tool-button[data-mode], #addGrid { width: 36px; padding: 0; font-size: 0; }
+  .tool-button[data-mode] span, #addGrid span { margin: 0; font-size: 15px; }
 }
 
 @media (max-width: 1200px) {
   :root { --sidebar-left: 240px; --sidebar-right: 320px; }
   .toolbar-hint { display: none; }
+  .zoom-control { display: none; }
   .brand { padding-left: 12px; }
 }

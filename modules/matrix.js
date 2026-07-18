@@ -14,11 +14,13 @@ export function transformSparseText(text, columns, kind) {
   if (kind === "left") transformed = matrix[0].map((_, column) => matrix.map(row => row[row.length - 1 - column]));
   if (kind === "transpose") transformed = matrix[0].map((_, column) => matrix.map(row => row[column]));
   if (kind === "mirror") transformed = matrix.map(row => [...row].reverse());
+  if (kind === "reflectVertical") transformed = [...matrix].reverse();
 
   const serialized = transformed.flat().map(value => value ?? " ").join("");
+  const isReflection = kind === "mirror" || kind === "reflectVertical";
   return {
-    text: kind === "mirror" ? serialized.replace(/ +$/, "") : serialized,
-    columns: kind === "mirror" ? columns : rowCount,
+    text: isReflection ? serialized.replace(/ +$/, "") : serialized,
+    columns: isReflection ? columns : rowCount,
   };
 }
 
@@ -30,5 +32,6 @@ export function transformSparseIndex(index, textLength, columns, kind) {
   if (kind === "left") return (columns - 1 - column) * rows + row;
   if (kind === "transpose") return column * rows + row;
   if (kind === "mirror") return row * columns + (columns - 1 - column);
+  if (kind === "reflectVertical") return (rows - 1 - row) * columns + column;
   return index;
 }
