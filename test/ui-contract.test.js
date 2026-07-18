@@ -6,14 +6,15 @@ const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 
-test("canvas focus and scrollbar handling never clear cell selections", () => {
+test("only an intentional empty-canvas pointer clears cell selections", () => {
   const start = app.indexOf('workspace.addEventListener("pointerdown"');
   const end = app.indexOf('workspace.addEventListener("dblclick"', start);
   assert.ok(start >= 0 && end > start);
   const handler = app.slice(start, end);
-  assert.doesNotMatch(handler, /selected\.clear\(/);
+  assert.match(handler, /event\.target\.closest\("\.grid-card"\)/);
   assert.match(handler, /pointerHitsWorkspaceScrollbar/);
-  assert.match(handler, /cell selections preserved/);
+  assert.match(handler, /state\.grids\.forEach\(grid => grid\.selected\.clear\(\)\)/);
+  assert.match(handler, /clear canvas selection/);
 });
 
 test("live-overlay styling keeps selected cells visibly selected", () => {

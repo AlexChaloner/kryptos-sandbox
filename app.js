@@ -2051,13 +2051,16 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
         workspace.classList.add("active-pan");
         return;
       }
-      if (event.button === 0 && state.selectedGridId) {
+      const hasCellSelections = state.grids.some(grid => grid.selected.size);
+      if (event.button === 0 && (state.selectedGridId || hasCellSelections)) {
         const before = captureSnapshot();
+        state.grids.forEach(grid => grid.selected.clear());
         state.selectedGridId = null;
         state.selectedGridIds = [];
+        state.analysisFullGrid = true;
         renderAll();
-        commitHistory(before, "clear grid focus");
-        setStatus("Grid focus cleared · cell selections preserved");
+        commitHistory(before, "clear canvas selection");
+        setStatus("Grid focus and cell selections cleared");
       }
     });
     workspace.addEventListener("dblclick", event => {
