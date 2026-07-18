@@ -26,8 +26,9 @@ export function randomEnglishBookSample() {
 }
 
 export const GRID_OPERATIONS = {
-  add: { symbol: "⊕", label: "add", calculate: (a, b, length) => (a + b) % length },
-  subtract: { symbol: "⊖", label: "subtract", calculate: (a, b, length) => (a - b + length) % length },
+  add: { symbol: "⊕", label: "add A + B", calculate: (a, b, length) => (a + b) % length },
+  subtract: { symbol: "−", label: "subtract A − B", calculate: (a, b, length) => (a - b + length) % length },
+  reverseSubtract: { symbol: "−", label: "subtract B − A", reverseOperands: true, calculate: (a, b, length) => (b - a + length) % length },
 };
 
 export function cleanText(value) {

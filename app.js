@@ -2,7 +2,7 @@ import {
   KRYPTOS_ALPHABET, NORMAL_ALPHABET, K1_CIPHERTEXT, K2_CIPHERTEXT, K3_CIPHERTEXT, K4_CIPHERTEXT, GRID_OPERATIONS,
   K1_PLAINTEXT, K2_PLAINTEXT, K3_PLAINTEXT,
   cleanText, cleanUnique, positionalK4Cribs, randomEnglishBookSample, combineCipherLetters, combineCipherText,
-} from "./modules/cipher.js?v=2";
+} from "./modules/cipher.js?v=3";
 import {
   letterCounts, indexOfCoincidence, frequencySimilarity, estimateNulls, formatPercent,
   scanVigenerePeriods, suggestVigenereKey, decryptVigenere, coincidenceSignificance, formatPValue,
@@ -27,6 +27,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
   let strideScanToken = 0;
   let strideScanTimer = null;
   let strideLastSignature = "";
+  let libraryEditorCommit = null;
   const STARTER_LIBRARY_VERSION = 1;
 
   const state = {
@@ -348,25 +349,58 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     toast(`Opened ${target.name}`);
   }
 
+  function openLibraryEditor(label, value, commit) {
+    const editor = $("#libraryEditor");
+    $("#libraryEditorLabel").textContent = label;
+    $("#libraryEditorInput").value = value;
+    libraryEditorCommit = commit;
+    editor.classList.remove("hidden");
+    editor.scrollIntoView({ block: "nearest" });
+    requestAnimationFrame(() => $("#libraryEditorInput").select());
+  }
+
+  function closeLibraryEditor() {
+    $("#libraryEditor").classList.add("hidden");
+    libraryEditorCommit = null;
+  }
+
   function createWorkspace(folderId = state.activeFolderId || state.folders[0]?.id, proposedName = "Untitled workspace") {
-    const name = prompt("Workspace name", proposedName);
-    if (!name?.trim()) return;
-    saveActiveWorkspaceState();
-    const entry = { id: uniqueId("workspace"), folderId, name: name.trim(), document: emptyWorkspaceDocument(name.trim()), history: [], future: [] };
-    state.workspaces.push(entry);
-    const folder = state.folders.find(item => item.id === folderId);
-    if (folder) folder.open = true;
-    switchWorkspace(entry.id);
+    openLibraryEditor("New workspace", proposedName, name => {
+      saveActiveWorkspaceState();
+      const entry = { id: uniqueId("workspace"), folderId, name, document: emptyWorkspaceDocument(name), history: [], future: [] };
+      state.workspaces.push(entry);
+      const folder = state.folders.find(item => item.id === folderId);
+      if (folder) folder.open = true;
+      switchWorkspace(entry.id);
+    });
+  }
+
+  function createFolder() {
+    openLibraryEditor("New folder", "New folder", name => {
+      const folder = { id: uniqueId("folder"), name, open: true };
+      state.folders.push(folder);
+      state.activeFolderId = folder.id;
+      renderWorkspaceTree();
+      scheduleLibraryPersistence();
+    });
   }
 
   function renameWorkspaceEntry(entry) {
-    const name = prompt("Workspace name", entry.name);
-    if (!name?.trim()) return;
-    entry.name = name.trim();
-    if (entry.id === state.activeWorkspaceId) $("#workspaceTitle").textContent = entry.name;
-    if (entry.document) entry.document.workspaceTitle = entry.name;
-    renderWorkspaceTree();
-    scheduleLibraryPersistence();
+    openLibraryEditor("Rename workspace", entry.name, name => {
+      entry.name = name;
+      if (entry.id === state.activeWorkspaceId) $("#workspaceTitle").textContent = entry.name;
+      if (entry.document) entry.document.workspaceTitle = entry.name;
+      renderWorkspaceTree();
+      scheduleLibraryPersistence();
+    });
+  }
+
+  function renameFolder(folder) {
+    openLibraryEditor("Rename folder", folder.name, name => {
+      folder.name = name;
+      renderWorkspaceTree();
+      scheduleLibraryPersistence();
+    });
   }
 
   function deleteWorkspaceEntry(entry) {
@@ -724,6 +758,16 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     });
   }
 
+  function operationPresentation(a, b, operation, result) {
+    if (operation === "reverseSubtract") {
+      return { compact: `B:${b}−A:${a}`, title: `B: ${b} minus A: ${a} = ${result}` };
+    }
+    if (operation === "subtract") {
+      return { compact: `A:${a}−B:${b}`, title: `A: ${a} minus B: ${b} = ${result}` };
+    }
+    return { compact: `A:${a}+B:${b}`, title: `A: ${a} plus B: ${b} = ${result}` };
+  }
+
   function renderLiveOverlay(base, overlay, overlayCard) {
     clearLiveOverlay();
     if (!base) return;
@@ -741,10 +785,14 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
         if (area > bestArea) { best = candidate; bestArea = area; }
       });
       if (!best || bestArea < Math.min(movingRect.width * movingRect.height, best.rect.width * best.rect.height) * .35) return;
-      const letter = combineLetters(overlay.text[overlayIndex], base.text[best.index], $("#combineOperation").value);
+      const operation = $("#combineOperation").value;
+      const a = overlay.text[overlayIndex];
+      const b = base.text[best.index];
+      const letter = combineLetters(a, b, operation);
+      const presentation = operationPresentation(a, b, operation, letter);
       cell.dataset.liveLetter = letter;
-      cell.dataset.liveFormula = `A:${overlay.text[overlayIndex]}${$("#combineOperation").value === "subtract" ? "−" : "+"}B:${base.text[best.index]}`;
-      cell.title = `A: ${overlay.text[overlayIndex]} ${$("#combineOperation").value === "subtract" ? "minus" : "plus"} B: ${base.text[best.index]} = ${letter}`;
+      cell.dataset.liveFormula = presentation.compact;
+      cell.title = presentation.title;
       cell.classList.add("live-overlay");
     });
   }
@@ -801,9 +849,12 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
         if (baseRow < 0 || baseColumn < 0 || baseColumn >= base.cols || baseIndex < 0 || baseIndex >= base.text.length) continue;
         const cell = cells[overlayIndex];
         if (!cell) continue;
-        cell.dataset.liveLetter = combineLetters(overlay.text[overlayIndex], base.text[baseIndex], link.operation);
-        cell.dataset.liveFormula = `A:${overlay.text[overlayIndex]}${link.operation === "subtract" ? "−" : "+"}B:${base.text[baseIndex]}`;
-        cell.title = `A: ${overlay.text[overlayIndex]} ${link.operation === "subtract" ? "minus" : "plus"} B: ${base.text[baseIndex]} = ${cell.dataset.liveLetter}`;
+        const a = overlay.text[overlayIndex];
+        const b = base.text[baseIndex];
+        cell.dataset.liveLetter = combineLetters(a, b, link.operation);
+        const presentation = operationPresentation(a, b, link.operation, cell.dataset.liveLetter);
+        cell.dataset.liveFormula = presentation.compact;
+        cell.title = presentation.title;
         cell.classList.add("live-overlay");
       }
     });
@@ -933,8 +984,11 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       Math.round((Math.max(base.x, overlay.x) + 24) / 8) * 8,
       Math.round((Math.max(base.y, overlay.y) + 48) / 8) * 8,
     );
+    const resultName = definition.reverseOperands
+      ? `${overlay.name} ${definition.symbol} ${base.name}`
+      : `${base.name} ${definition.symbol} ${overlay.name}`;
     const result = {
-      id: uniqueId("operation"), name: `${base.name} ${definition.symbol} ${overlay.name}`,
+      id: uniqueId("operation"), name: resultName,
       text, cols: Math.min(base.cols, overlay.cols), cellSize: Math.min(base.cellSize, overlay.cellSize),
       x: resultPosition.x,
       y: resultPosition.y,
@@ -947,7 +1001,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     state.selectedGridIds = [result.id];
     renderAll();
     $(`.grid-card[data-id="${result.id}"]`, workspace)?.classList.add("combine-flash");
-    setStatus(`Combined ${length} letters using ${operation}`);
+    setStatus(`Combined ${length} letters: ${definition.label}`);
     toast(`Created ${result.name}`);
   }
 
@@ -1469,20 +1523,13 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
   }
 
   function editLetterAt(grid, index, mode) {
-    let letter = "";
-    if (mode !== "delete") {
-      const response = prompt(`${mode === "replace" ? "Replace with" : "Insert"} letter`, grid.text[index] || "A");
-      if (response == null) return;
-      letter = cleanText(response)[0];
-      if (!letter) return toast("Enter one letter or ? for an unknown slot");
-    }
     const before = captureSnapshot();
     const targetGrid = synchronizedRoot(grid);
     targetGrid.derived = null;
     const characters = [...targetGrid.text];
-    if (mode === "replace") characters[index] = letter;
-    if (mode === "before") characters.splice(index, 0, letter);
-    if (mode === "after") characters.splice(index + 1, 0, letter);
+    if (mode === "replace") characters[index] = "?";
+    if (mode === "before") characters.splice(index, 0, "?");
+    if (mode === "after") characters.splice(index + 1, 0, "?");
     if (mode === "delete") characters.splice(index, 1);
     targetGrid.text = characters.join("");
     const selectedIndex = mode === "after" ? index + 1 : Math.min(index, Math.max(0, targetGrid.text.length - 1));
@@ -1540,12 +1587,11 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
   }
 
   function renameGrid(grid) {
-    const before = captureSnapshot();
-    const name = prompt("Grid name", grid.name);
-    if (!name?.trim()) return;
-    grid.name = name.trim();
-    renderAll();
-    commitHistory(before, "rename grid");
+    selectGrid(grid.id, true);
+    const input = $("#gridName");
+    input.focus();
+    input.select();
+    setStatus("Edit the grid name in Properties, then press Enter");
   }
 
   function loadSnapshot() {
@@ -1640,16 +1686,16 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
         if (cell) {
           const index = Number(cell.dataset.index);
           items.push(
-            { icon: "✎", label: `Replace letter ${index + 1}…`, action: () => editLetterAt(grid, index, "replace") },
-            { icon: "←", label: "Insert letter before…", action: () => editLetterAt(grid, index, "before") },
-            { icon: "→", label: "Insert letter after…", action: () => editLetterAt(grid, index, "after") },
+            { icon: "?", label: `Set letter ${index + 1} to unknown`, action: () => editLetterAt(grid, index, "replace") },
+            { icon: "←", label: "Insert unknown before", action: () => editLetterAt(grid, index, "before") },
+            { icon: "→", label: "Insert unknown after", action: () => editLetterAt(grid, index, "after") },
             { icon: "×", label: "Delete this letter", danger: true, action: () => editLetterAt(grid, index, "delete") },
             { separator: true },
           );
         }
         items.push(
           { icon: "⌘", label: "Copy grid", action: () => copyText(formatGridForClipboard(grid)) },
-          { icon: "✎", label: "Rename grid…", action: () => renameGrid(grid) },
+          { icon: "✎", label: "Rename grid", action: () => renameGrid(grid) },
           { icon: "⧉", label: "Duplicate grid", action: duplicateGrid },
           { icon: "⇄", label: "Create synchronized view…", action: createSynchronizedView },
           { icon: "↷", label: "Rotate clockwise", action: () => transformGrid("right") },
@@ -1700,6 +1746,12 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     $("#gridName").addEventListener("focus", event => event.target._historyBefore = captureSnapshot());
     $("#gridName").addEventListener("input", event => { const grid = currentGrid(); if (grid) { grid.name = event.target.value; $(".grid-card-title", $(`.grid-card[data-id="${grid.id}"]`)).textContent = grid.name; } });
     $("#gridName").addEventListener("change", event => commitHistory(event.target._historyBefore, "rename grid"));
+    $("#gridName").addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        event.target.blur();
+      }
+    });
     $("#gridColumns").addEventListener("change", event => { const grid = currentGrid(); if (grid) { const before = captureSnapshot(); grid.derived = null; if (grid.text.includes(" ")) grid.text = grid.text.replaceAll(" ", ""); grid.cols = clamp(Number(event.target.value) || 1, 1, 500); fitGridCardToContent(grid); grid.selected.clear(); renderAll(); commitHistory(before, `reshape ${grid.name}`); } });
     $("#cellSize").addEventListener("change", event => { const grid = currentGrid(); if (grid) { const before = captureSnapshot(); state.cellSize = clamp(Number(event.target.value) || 28, 20, 64); state.grids.forEach(item => { item.cellSize = state.cellSize; fitGridCardToContent(item); }); renderAll(); commitHistory(before, "resize workspace cells"); } });
     $("#applyText").addEventListener("click", () => {
@@ -1852,7 +1904,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
         if (!entry) return;
         showContextMenu([
           { icon: "▦", label: "Open workspace", action: () => switchWorkspace(entry.id) },
-          { icon: "✎", label: "Rename workspace…", action: () => renameWorkspaceEntry(entry) },
+          { icon: "✎", label: "Rename workspace", action: () => renameWorkspaceEntry(entry) },
           { icon: "⧉", label: "Duplicate workspace", action: () => {
             saveActiveWorkspaceState();
             const copy = { ...cloneSerializable(entry), id: uniqueId("workspace"), name: `${entry.name} copy` };
@@ -1867,8 +1919,8 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
         const folder = state.folders.find(item => item.id === folderRow.dataset.folderId);
         if (!folder) return;
         showContextMenu([
-          { icon: "＋", label: "New workspace here…", action: () => createWorkspace(folder.id) },
-          { icon: "✎", label: "Rename folder…", action: () => { const name = prompt("Folder name", folder.name); if (name?.trim()) { folder.name = name.trim(); renderWorkspaceTree(); scheduleLibraryPersistence(); } } },
+          { icon: "＋", label: "New workspace here", action: () => createWorkspace(folder.id) },
+          { icon: "✎", label: "Rename folder", action: () => renameFolder(folder) },
           { separator: true },
           { icon: "⌫", label: "Delete folder", danger: true, action: () => {
             if (state.folders.length === 1) return toast("At least one folder must remain");
@@ -1881,13 +1933,8 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
         return;
       }
       showContextMenu([
-        { icon: "＋", label: "New workspace…", action: () => createWorkspace() },
-        { icon: "▰", label: "New folder…", action: () => {
-          const name = prompt("Folder name", "New folder");
-          if (!name?.trim()) return;
-          const folder = { id: uniqueId("folder"), name: name.trim(), open: true };
-          state.folders.push(folder); state.activeFolderId = folder.id; renderWorkspaceTree(); scheduleLibraryPersistence();
-        } },
+        { icon: "＋", label: "New workspace", action: () => createWorkspace() },
+        { icon: "▰", label: "New folder", action: createFolder },
       ], event.clientX, event.clientY);
     });
     $("#workspaceTree").addEventListener("dragstart", event => {
@@ -1927,6 +1974,25 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     }));
     $("#renameWorkspace").addEventListener("click", () => { const entry = state.workspaces.find(item => item.id === state.activeWorkspaceId); if (entry) renameWorkspaceEntry(entry); });
     $("#addWorkspace").addEventListener("click", () => createWorkspace());
+    $("#libraryEditor").addEventListener("submit", event => {
+      event.preventDefault();
+      const name = $("#libraryEditorInput").value.trim();
+      if (!name) {
+        toast("Enter a name");
+        $("#libraryEditorInput").focus();
+        return;
+      }
+      const commit = libraryEditorCommit;
+      closeLibraryEditor();
+      commit?.(name);
+    });
+    $("#cancelLibraryEditor").addEventListener("click", closeLibraryEditor);
+    $("#libraryEditorInput").addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeLibraryEditor();
+      }
+    });
 
     document.addEventListener("pointerdown", event => {
       if (!event.target.closest(".clone-extend-control")) closeCloneExtend();

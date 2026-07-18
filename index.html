@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=3" />
+    <link rel="stylesheet" href="styles.css?v=4" />
   </head>
   <body>
     <div class="app-shell">
@@ -45,6 +45,15 @@
             </div>
             <button class="icon-button small" id="addWorkspace" title="New workspace">＋</button>
           </div>
+
+          <form class="library-editor hidden" id="libraryEditor">
+            <label for="libraryEditorInput" id="libraryEditorLabel">Workspace name</label>
+            <div>
+              <input id="libraryEditorInput" autocomplete="off" maxlength="80" />
+              <button class="library-editor-save" type="submit" aria-label="Save name" title="Save">✓</button>
+              <button id="cancelLibraryEditor" type="button" aria-label="Cancel naming" title="Cancel">×</button>
+            </div>
+          </form>
 
           <div class="workspace-tree" id="workspaceTree"><div class="tree-empty">Loading workspaces…</div></div>
 
@@ -161,7 +170,7 @@
               <div class="switch-row"><span><strong>Snap & combine</strong><small>Add letters when grids overlap</small></span><label class="switch"><input id="snapCombine" type="checkbox" checked /><i></i></label></div>
               <div class="switch-row"><span><strong>Show indices</strong><small>Display alphabet values in cells</small></span><label class="switch"><input id="showIndices" type="checkbox" /><i></i></label></div>
               <label class="field-label">Combine operation</label>
-              <select class="select-input" id="combineOperation"><option value="add">Add (A + B)</option><option value="subtract">Subtract (A − B)</option></select>
+              <select class="select-input" id="combineOperation"><option value="add">Add (A + B)</option><option value="subtract">Subtract (A − B)</option><option value="reverseSubtract">Subtract (B − A)</option></select>
             </section>
           </div>
 
@@ -284,6 +293,6 @@
         </div>
       </div>
     </div>
-    <script type="module" src="app.js?v=5"></script>
+    <script type="module" src="app.js?v=6"></script>
   </body>
 </html>
