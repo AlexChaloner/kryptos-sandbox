@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=6" />
+    <link rel="stylesheet" href="styles.css?v=7" />
   </head>
   <body>
     <div class="app-shell">
@@ -230,6 +230,33 @@
                 <div class="column-analysis" id="columnAnalysis"></div>
               </div>
             </section>
+            <section class="inspector-section grid-diagnostic-analysis">
+              <div class="section-title"><span>GRID LINE DIAGNOSTICS</span><button class="info-button" type="button" data-info="Compare physical rows, columns, and diagonals without flattening the grid" title="Compare physical rows, columns, and diagonals without flattening the grid" aria-label="Explain grid line diagnostics">i</button></div>
+              <p class="analysis-explanation">Find locally unusual lines using English n-grams, IC, frequency fit, repeated bigrams, and alphabet coverage. Click a line to select its cells.</p>
+              <div class="grid-diagnostic-filters" id="gridDiagnosticFilters">
+                <button class="active" type="button" data-line-kind="all">All</button>
+                <button type="button" data-line-kind="row">Rows</button>
+                <button type="button" data-line-kind="column">Columns</button>
+                <button type="button" data-line-kind="diagonal">Diagonals</button>
+              </div>
+              <div class="stride-status" id="gridDiagnosticStatus">Select a grid with at least four letters.</div>
+              <div class="grid-diagnostic-head"><span>line</span><span>relative n-gram evidence</span><span>IC</span><span>fit</span></div>
+              <div class="grid-diagnostic-list" id="gridDiagnosticList"></div>
+            </section>
+            <section class="inspector-section grid-route-analysis">
+              <div class="section-title"><span>2D GRID ROUTE EXPLORER</span><button class="info-button" type="button" data-info="Rank shape-aware row, column, snake, diagonal, and spiral readings" title="Rank shape-aware row, column, snake, diagonal, and spiral readings" aria-label="Explain 2D grid routes">i</button></div>
+              <p class="analysis-explanation">Read the current shape without compacting its holes, then rank each traversal with English bigram, trigram, and quadgram evidence.</p>
+              <div class="stride-status" id="gridRouteStatus">Select a grid with at least eight letters.</div>
+              <div class="stride-results grid-route-results" id="gridRouteResults"></div>
+              <div class="stride-detail hidden" id="gridRouteDetail">
+                <div class="period-detail-head"><span id="gridRouteName">—</span><span>adjusted score <b id="gridRouteScore">—</b></span></div>
+                <div class="stride-evidence" id="gridRouteEvidence"></div>
+                <label class="field-label">Route preview</label>
+                <div class="decrypt-preview" id="gridRoutePreview">—</div>
+                <button class="operation-button" id="createGridRoute">Create route as grid</button>
+                <p class="route-caveat">Scores are standardized only within this route family. Holes are skipped during reading; the source grid itself is never compacted.</p>
+              </div>
+            </section>
             <section class="inspector-section stride-analysis">
               <div class="section-title"><span>MODULAR ROUTE SCAN</span><button class="info-button" type="button" data-info="Read the text at each coprime step modulo its length and rank the resulting routes" title="Read the text at each coprime step modulo its length and rank the resulting routes" aria-label="Explain modular route scan">i</button></div>
               <p class="analysis-explanation">Test every full-cycle stride N. Rank direct English, or undo a transposition and search the result for a Vigenère key length.</p>
@@ -310,6 +337,6 @@
         </div>
       </div>
     </div>
-    <script type="module" src="app.js?v=12"></script>
+    <script type="module" src="app.js?v=13"></script>
   </body>
 </html>

@@ -25,3 +25,12 @@ test("compaction is exposed as a separate disabled-until-useful action", () => {
   assert.match(app, /compactSelectedGrid/);
   assert.match(app, /materializedOverlayLayout\(resolved\.combined\)/);
 });
+
+test("analysis sidebar exposes physical-line diagnostics and shape-aware routes", () => {
+  assert.match(html, /id="gridDiagnosticList"/);
+  assert.match(html, /id="gridRouteResults"/);
+  assert.match(html, /id="createGridRoute"/);
+  assert.match(app, /scanGridDiagnostics\(grid\.text, grid\.cols\)/);
+  assert.match(app, /scanGridRoutes\(grid\.text, grid\.cols\)/);
+  assert.match(app, /grid\.selected = new Set\(candidate\.indices\)/);
+});

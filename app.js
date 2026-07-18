@@ -16,6 +16,7 @@ import { uniqueId, clamp, escapeHtml } from "./modules/utils.js";
 import { transformSparseIndex, transformSparseText } from "./modules/matrix.js?v=3";
 import { createContextMenuController } from "./modules/context-menu.js";
 import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition-analysis.js";
+import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js";
 
 (() => {
   "use strict";
@@ -32,6 +33,14 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
   let strideScanToken = 0;
   let strideScanTimer = null;
   let strideLastSignature = "";
+  let gridDiagnosticScan = null;
+  let gridDiagnosticFilter = "all";
+  let gridDiagnosticSelectedId = null;
+  let gridRouteScan = null;
+  let gridRouteSelected = null;
+  let gridShapeScanToken = 0;
+  let gridShapeScanTimer = null;
+  let gridShapeLastSignature = "";
   let libraryEditorCommit = null;
   let liveOverlayPreviewSignature = "";
   const STARTER_LIBRARY_VERSION = 1;
@@ -1461,7 +1470,10 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     $("#analyseAll").disabled = !grid?.selected.size;
     $("#analysisSequence").textContent = sequence || "—";
     $("#analysisLength").textContent = `${sequence.length} character${sequence.length === 1 ? "" : "s"}`;
-    if ($("#analysisPanel").classList.contains("active")) scheduleModularStrideScan(sequence);
+    if ($("#analysisPanel").classList.contains("active")) {
+      scheduleModularStrideScan(sequence);
+      scheduleGridShapeScan(grid);
+    }
     if (sequence.length < 2) {
       $("#icValue").textContent = "—";
       $("#freqFit").textContent = "—";
@@ -1537,6 +1549,87 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
     if ($("#candidateKey").value !== key) $("#candidateKey").value = key;
     const plaintext = decryptVigenere(sequence, key, state.alphabet);
     $("#decryptPreview").textContent = plaintext ? `${plaintext.slice(0, 180)}${plaintext.length > 180 ? "…" : ""}` : "Enter a candidate key";
+  }
+
+  function clearGridShapeScan(message = "Select a grid with at least four letters.") {
+    gridShapeScanToken++;
+    gridShapeLastSignature = "";
+    gridDiagnosticScan = null;
+    gridRouteScan = null;
+    gridRouteSelected = null;
+    $("#gridDiagnosticStatus").textContent = message;
+    $("#gridDiagnosticList").innerHTML = "";
+    $("#gridRouteStatus").textContent = "Select a grid with at least eight letters.";
+    $("#gridRouteResults").innerHTML = "";
+    $("#gridRouteDetail").classList.add("hidden");
+  }
+
+  function scheduleGridShapeScan(grid = currentGrid()) {
+    clearTimeout(gridShapeScanTimer);
+    const length = grid ? grid.text.replace(/[^A-Z]/g, "").length : 0;
+    if (!grid || length < 4) return clearGridShapeScan();
+    const signature = JSON.stringify({ id: grid.id, text: grid.text, columns: grid.cols });
+    if (signature === gridShapeLastSignature && gridDiagnosticScan) return;
+    gridDiagnosticSelectedId = null;
+    const token = ++gridShapeScanToken;
+    $("#gridDiagnosticStatus").textContent = "Grid changed · line scan queued…";
+    $("#gridRouteStatus").textContent = length >= 8 ? "Grid changed · route scan queued…" : "Select a grid with at least eight letters.";
+    gridShapeScanTimer = setTimeout(() => runGridShapeScan(grid, length, signature, token), 240);
+  }
+
+  async function runGridShapeScan(grid, length, signature, token) {
+    $("#gridDiagnosticStatus").textContent = "Scoring rows, columns, and diagonals…";
+    if (length >= 8) $("#gridRouteStatus").textContent = "Scoring shape-aware routes…";
+    try {
+      const [diagnostics, routes] = await Promise.all([
+        scanGridDiagnostics(grid.text, grid.cols),
+        length >= 8 ? scanGridRoutes(grid.text, grid.cols) : Promise.resolve(null),
+      ]);
+      if (token !== gridShapeScanToken) return;
+      gridShapeLastSignature = signature;
+      gridDiagnosticScan = diagnostics;
+      gridRouteScan = routes;
+      gridRouteSelected = routes?.candidates[0] || null;
+      $("#gridDiagnosticStatus").textContent = `${diagnostics.candidates.length} physical lines scored · click one to select it`;
+      renderGridDiagnostics();
+      if (routes) {
+        $("#gridRouteStatus").textContent = `${routes.candidates.length} distinct traversals scored · click one to inspect it`;
+        renderGridRouteResults();
+        if (gridRouteSelected) renderGridRouteDetail(gridRouteSelected);
+      }
+    } catch (error) {
+      if (token !== gridShapeScanToken) return;
+      $("#gridDiagnosticStatus").textContent = `Grid scan failed: ${error.message}`;
+      $("#gridRouteStatus").textContent = `Grid scan failed: ${error.message}`;
+    }
+  }
+
+  function renderGridDiagnostics() {
+    if (!gridDiagnosticScan) return;
+    const candidates = gridDiagnosticScan.candidates.filter(candidate => gridDiagnosticFilter === "all" || candidate.kind === gridDiagnosticFilter);
+    $("#gridDiagnosticList").innerHTML = candidates.map(candidate => {
+      const heat = clamp((candidate.score + 2.5) / 5 * 100, 2, 100);
+      const selected = candidate.id === gridDiagnosticSelectedId ? " selected" : "";
+      const detail = `${candidate.label}: n=${candidate.length}, n-gram z=${candidate.score.toFixed(2)}, IC=${candidate.ic.toFixed(4)}, frequency fit=${candidate.frequencyFit.toFixed(1)}%, repeated-bigram density=${(candidate.repetitionDensity * 100).toFixed(1)}%, alphabet coverage=${(candidate.alphabetCoverage * 100).toFixed(1)}%`;
+      return `<button class="grid-diagnostic-row${selected}" type="button" data-line-id="${candidate.id}" title="${escapeHtml(detail)}"><span>${candidate.label} · ${candidate.length}</span><i><b style="width:${heat}%"></b></i><strong>${candidate.ic.toFixed(3)}</strong><strong>${candidate.frequencyFit.toFixed(0)}</strong></button>`;
+    }).join("") || '<div class="chart-placeholder">No lines in this group</div>';
+  }
+
+  function renderGridRouteResults() {
+    if (!gridRouteScan) return;
+    $("#gridRouteResults").innerHTML = gridRouteScan.candidates.map((candidate, index) => `<button class="stride-result-row${candidate === gridRouteSelected ? " selected" : ""}" type="button" data-grid-route-rank="${index}">
+      <span>${index + 1}</span><strong>${candidate.label}</strong><b>z=${candidate.score.toFixed(2)}</b><small>${candidate.family} · ${candidate.route.length} letters</small>
+    </button>`).join("");
+  }
+
+  function renderGridRouteDetail(candidate) {
+    gridRouteSelected = candidate;
+    renderGridRouteResults();
+    $("#gridRouteDetail").classList.remove("hidden");
+    $("#gridRouteName").textContent = candidate.label;
+    $("#gridRouteScore").textContent = `z=${candidate.score.toFixed(2)}`;
+    $("#gridRouteEvidence").innerHTML = gridRouteScan.sizes.map(size => `<span>${size}-gram <b>${candidate.ngrams[size].toFixed(3)}</b></span>`).join("");
+    $("#gridRoutePreview").textContent = `${candidate.route.slice(0, 240)}${candidate.route.length > 240 ? "…" : ""}`;
   }
 
   function modularStrideSignature(sequence) {
@@ -2144,6 +2237,35 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
       renderPeriodScan(sequence);
     });
     $("#candidateKey").addEventListener("input", () => renderVigenerePreview());
+    $("#gridDiagnosticFilters").addEventListener("click", event => {
+      const button = event.target.closest("[data-line-kind]");
+      if (!button) return;
+      gridDiagnosticFilter = button.dataset.lineKind;
+      $$("#gridDiagnosticFilters button").forEach(item => item.classList.toggle("active", item === button));
+      renderGridDiagnostics();
+    });
+    $("#gridDiagnosticList").addEventListener("click", event => {
+      const row = event.target.closest("[data-line-id]");
+      const grid = currentGrid();
+      const candidate = gridDiagnosticScan?.candidates.find(item => item.id === row?.dataset.lineId);
+      if (!grid || !candidate) return;
+      const before = captureSnapshot();
+      gridDiagnosticSelectedId = candidate.id;
+      grid.selected = new Set(candidate.indices);
+      grid.selectionOrientation = candidate.kind === "column" ? "vertical" : "horizontal";
+      synchronizeSelection(grid);
+      renderAll();
+      renderGridDiagnostics();
+      commitHistory(before, `select ${candidate.label} in ${grid.name}`);
+    });
+    $("#gridRouteResults").addEventListener("click", event => {
+      const row = event.target.closest("[data-grid-route-rank]");
+      if (row && gridRouteScan) renderGridRouteDetail(gridRouteScan.candidates[Number(row.dataset.gridRouteRank)]);
+    });
+    $("#createGridRoute").addEventListener("click", () => {
+      if (!gridRouteSelected) return;
+      addGrid(gridRouteSelected.route, `2D route · ${gridRouteSelected.label}`, { cols: gridRouteSelected.outputColumns });
+    });
     $("#strideScoreMode").addEventListener("change", event => {
       $("#layeredKeyLimit").classList.toggle("hidden", event.target.value !== "layered");
       $$(".ngram-size").forEach(control => control.closest("label").classList.toggle("muted-option", event.target.value !== "ngrams"));

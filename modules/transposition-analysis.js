@@ -7,7 +7,7 @@ function gcd(a, b) {
   return Math.abs(a);
 }
 
-async function loadNgramModels() {
+export async function loadNgramModels() {
   if (modelPromise) return modelPromise;
   modelPromise = fetch("quadgrams.json").then(async response => {
     if (!response.ok) throw new Error(`English n-gram model returned ${response.status}`);
@@ -41,7 +41,7 @@ export function modularRoute(source, step, start = 0) {
   return output.join("");
 }
 
-function ngramScore(sequence, size, model, cyclic = true) {
+export function ngramScore(sequence, size, model, cyclic = true) {
   if (sequence.length < size) return model.floor;
   const sample = cyclic ? sequence + sequence.slice(0, size - 1) : sequence;
   const windows = cyclic ? sequence.length : sequence.length - size + 1;
@@ -50,7 +50,8 @@ function ngramScore(sequence, size, model, cyclic = true) {
   return score / windows;
 }
 
-function standardizeCandidates(candidates, sizes) {
+export function standardizeCandidates(candidates, sizes) {
+  if (!candidates.length) return candidates;
   for (const size of sizes) {
     const values = candidates.map(candidate => candidate.ngrams[size]);
     const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -63,6 +64,24 @@ function standardizeCandidates(candidates, sizes) {
   const mean = candidates.reduce((sum, candidate) => sum + candidate.combinedNgramEvidence, 0) / candidates.length;
   const deviation = Math.sqrt(candidates.reduce((sum, candidate) => sum + (candidate.combinedNgramEvidence - mean) ** 2, 0) / candidates.length) || 1;
   candidates.forEach(candidate => { candidate.score = (candidate.combinedNgramEvidence - mean) / deviation; });
+  return candidates;
+}
+
+export function scoreRouteCandidatesWithModels(candidates, models, options = {}) {
+  const sizes = options.ngramSizes?.length ? options.ngramSizes : [2, 3, 4];
+  const cyclic = Boolean(options.cyclic);
+  const scored = candidates.map(candidate => ({ ...candidate, ngrams: {}, ngramZ: {} }));
+  scored.forEach(candidate => {
+    sizes.forEach(size => { candidate.ngrams[size] = ngramScore(candidate.route, size, models[size], cyclic); });
+  });
+  standardizeCandidates(scored, sizes);
+  return scored;
+}
+
+export async function scoreRouteCandidates(candidates, options = {}) {
+  const models = options.models || await loadNgramModels();
+  const scored = scoreRouteCandidatesWithModels(candidates, models, options);
+  return { candidates: scored, models, sizes: options.ngramSizes?.length ? options.ngramSizes : [2, 3, 4] };
 }
 
 export async function scanModularRoutes(sequence, options = {}) {
