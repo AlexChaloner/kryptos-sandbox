@@ -146,7 +146,7 @@ kbd { font: 9px "DM Mono", monospace; color: #bab9ae; border: 1px solid #4a4a44;
 .zoom-control button { width: 26px; height: 26px; border: 0; background: none; color: var(--muted); }
 .zoom-control span { width: 44px; text-align: center; font: 10px "DM Mono", monospace; color: var(--muted); }
 
-.workspace { position: relative; overflow: auto; background-color: #11110f; min-height: 0; }
+.workspace { position: relative; z-index: 0; isolation: isolate; overflow: auto; background-color: #11110f; min-height: 0; }
 .workspace-grid { position: absolute; inset: 0; width: 2400px; height: 1600px; pointer-events: none; background-image: linear-gradient(rgba(255,255,255,.026) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.026) 1px, transparent 1px), radial-gradient(circle at 50% 20%, rgba(179,128,49,.055), transparent 42%); background-size: 24px 24px, 24px 24px, 100% 100%; transform-origin: 0 0; }
 .workspace.panning { cursor: grab; }
 .workspace.panning.active-pan { cursor: grabbing; }
@@ -174,8 +174,8 @@ kbd { font: 9px "DM Mono", monospace; color: #bab9ae; border: 1px solid #4a4a44;
 .grid-card.overlay-top .letter-cell.selected { background-color: rgba(141, 105, 46, .82); }
 .grid-card.drop-target { border-color: var(--amber-bright); box-shadow: 0 0 0 2px rgba(227,170,77,.22), 0 0 32px rgba(227,170,77,.12); }
 .grid-card.preview-a, .grid-card.preview-b { overflow: hidden; }
-.grid-card.preview-a { border-color: var(--amber-bright); }
-.grid-card.preview-b { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(104,169,194,.2), 0 0 30px rgba(104,169,194,.13); }
+.grid-card.preview-a { z-index: 2147483647 !important; border-color: var(--amber-bright); }
+.grid-card.preview-b { z-index: 2147483646 !important; border-color: var(--blue); box-shadow: 0 0 0 2px rgba(104,169,194,.2), 0 0 30px rgba(104,169,194,.13); }
 .grid-card.preview-a::before, .grid-card.preview-b::before { position: absolute; left: 7px; top: 7px; z-index: 8; width: 19px; height: 19px; display: grid; place-items: center; border-radius: 50%; font: 700 10px "DM Mono", monospace; box-shadow: 0 2px 8px rgba(0,0,0,.45); }
 .grid-card.preview-a::before { content: "A"; background: var(--amber); color: #21190e; }
 .grid-card.preview-b::before { content: "B"; background: var(--blue); color: #102128; }

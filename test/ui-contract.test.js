@@ -21,6 +21,15 @@ test("live-overlay styling keeps selected cells visibly selected", () => {
   assert.match(styles, /\.letter-cell\.live-overlay\.selected\s*\{/);
 });
 
+test("global menus stay above isolated grid layers and preview A stays above B", () => {
+  assert.match(styles, /\.workspace\s*\{[^}]*isolation:\s*isolate/s);
+  const previewA = styles.match(/\.grid-card\.preview-a\s*\{[^}]*z-index:\s*(\d+)/s);
+  const previewB = styles.match(/\.grid-card\.preview-b\s*\{[^}]*z-index:\s*(\d+)/s);
+  assert.ok(previewA && previewB);
+  assert.ok(Number(previewA[1]) > Number(previewB[1]));
+  assert.match(styles, /\.context-menu\s*\{[^}]*position:\s*fixed/s);
+});
+
 test("compaction is exposed as a separate disabled-until-useful action", () => {
   assert.match(html, /id="compactGrid"[^>]*disabled>Compact selected grid<\/button>/);
   assert.match(app, /compactSelectedGrid/);
