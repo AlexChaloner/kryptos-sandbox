@@ -190,7 +190,9 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
     state.restoringHistory = true;
     state.grids = snapshot.grids.map(grid => ({
       ...grid,
-      derived: grid.derived ? { ...grid.derived, alignment: grid.derived.alignment ? { ...grid.derived.alignment } : null } : null,
+      // Older releases saved materialized live overlays as aligned derived grids.
+      // Keep their stored cells but detach that obsolete relationship on restore.
+      derived: grid.derived?.alignment ? null : grid.derived ? { ...grid.derived, alignment: null } : null,
       highlights: { ...(grid.highlights || {}) },
       selected: new Set(grid.selected || []),
     }));
@@ -1207,7 +1209,9 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
       y: resultPosition.y,
       width: resultWidth, height: resultHeight,
       selected: new Set(), highlights: {}, z: ++state.z,
-      derived: { baseId: operandA.id, overlayId: operandB.id, operation, alignment: combined.alignment, compact: false }
+      // Materializing a live overlay is a frozen snapshot. Flat A/B combinations
+      // intentionally remain derived and continue following their operands.
+      derived: link ? null : { baseId: operandA.id, overlayId: operandB.id, operation, alignment: null, compact: false }
     };
     state.grids.push(result);
     state.selectedGridId = result.id;
@@ -1215,7 +1219,7 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
     renderAll();
     $(`.grid-card[data-id="${result.id}"]`, workspace)?.classList.add("combine-flash");
     setStatus(`${link ? "Materialized" : "Combined"} ${combined.combinedCount ?? combined.alignedCount} letters: ${definition.label}`);
-    toast(`Created ${result.name}`);
+    toast(`Created ${result.name}${link ? " · independent snapshot" : ""}`);
   }
 
   function positionInsideViewport(width, height, preferredX = null, preferredY = null) {

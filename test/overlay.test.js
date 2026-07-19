@@ -179,6 +179,21 @@ test("live materialization defaults to sparse and only compacts when explicitly 
   assert.deepEqual(materializedOverlayLayout(resolved.combined, true), { text: "ZZAZ", columns: 3 });
 });
 
+test("a materialized live layout is a frozen value when operands and operation later change", () => {
+  const base = grid("base", "ABCDEF", 3);
+  const overlay = grid("overlay", "ZYXWVU", 3);
+  const overlayLink = link({ operation: "subtract" });
+  const frozen = materializedOverlayLayout(resolveOverlayLink(overlayLink, [base, overlay], NORMAL_ALPHABET).combined);
+  const snapshot = { ...frozen };
+
+  base.text = "AAAAAA";
+  overlayLink.operation = "add";
+  const changedLiveResult = materializedOverlayLayout(resolveOverlayLink(overlayLink, [base, overlay], NORMAL_ALPHABET).combined);
+
+  assert.deepEqual(frozen, snapshot);
+  assert.notDeepEqual(changedLiveResult, frozen);
+});
+
 test("result width is recalculated if either source is reshaped", () => {
   const base = grid("base", "A".repeat(48), 8);
   const overlay = grid("overlay", "B".repeat(48), 6);

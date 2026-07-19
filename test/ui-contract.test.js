@@ -60,3 +60,9 @@ test("whole-grid copy and paste uses structured duplication while cell copy stay
   assert.match(app, /copiedGridClipboard = null/);
   assert.match(html, /duplicate a copied whole grid/);
 });
+
+test("creating from a live overlay produces an independent snapshot", () => {
+  assert.match(app, /derived: link \? null : \{ baseId:/);
+  assert.match(app, /derived: grid\.derived\?\.alignment \? null :/);
+  assert.match(app, /independent snapshot/);
+});
