@@ -86,6 +86,18 @@ test("analysis follows preview and persisted live-overlay results", () => {
   assert.match(app, /LIVE OVERLAY · \$\{layout\.label\}/);
 });
 
+test("analysis exposes headline period IC, conditional English coding, and rare board-edge signals", () => {
+  assert.match(html, /id="maxPeriodIc"/);
+  assert.match(html, /id="compressionBpc"/);
+  assert.match(html, /id="analysisSignal"/);
+  assert.match(app, /candidate\.averageIc > best\.averageIc/);
+  assert.match(app, /candidate\.significance\.pValue < best\.significance\.pValue/);
+  assert.match(app, /pValue: Math\.min\(1, periodSummary\.rareCandidate\.significance\.pValue \* testedPeriods\)/);
+  assert.match(app, /new Worker\("\.\/compression-worker\.js\?v=1"/);
+  assert.match(styles, /\.grid-card\.analysis-event/);
+  assert.match(styles, /prefers-reduced-motion/);
+});
+
 test("workspace persistence flushes on tab lifecycle events and handles storage failure", () => {
   assert.match(app, /window\.addEventListener\("pagehide"/);
   assert.match(app, /document\.addEventListener\("visibilitychange"/);

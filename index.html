@@ -195,6 +195,12 @@
           <div class="tab-panel" id="analysisPanel">
             <section class="analysis-hero">
               <span class="eyebrow" id="analysisContext">CURRENT GRID</span>
+              <div class="analysis-headline-metrics" aria-label="Headline analysis metrics">
+                <div><span>IC</span><strong id="topIcValue">—</strong></div>
+                <div><span>FREQ.</span><strong id="topFreqFit">—</strong></div>
+                <div><span>MAX PERIOD IC</span><strong id="maxPeriodIc">—</strong><small id="maxPeriodLabel">—</small></div>
+              </div>
+              <div class="analysis-signal hidden" id="analysisSignal" role="status"></div>
               <div class="selection-sequence" id="analysisSequence">—</div>
               <div class="analysis-meta"><span id="analysisLength">0 characters</span><button id="analyseAll">Use full grid</button></div>
             </section>
@@ -210,6 +216,15 @@
               <div class="metric-value"><strong id="freqFit">—</strong><span>similarity score</span></div>
               <div class="meter warm"><i id="freqMeter"></i></div>
               <div class="null-result"><span>Random string matches this well</span><strong id="freqPValue">—</strong></div>
+            </section>
+            <section class="inspector-section compression-analysis">
+              <div class="section-title"><span>CONDITIONAL ENGLISH CODE</span><button class="info-button" type="button" data-info="Ideal code length from a smoothed English quadgram model; lower bits per character means the text is more predictable as English" title="English conditional code length" aria-label="Explain conditional English code length">i</button></div>
+              <p class="analysis-explanation">How compactly a general-English model describes this text, calibrated against random strings of the same length and shuffled copies with exactly the same letters.</p>
+              <div class="compression-score"><strong id="compressionBpc">—</strong><span>bits / character</span></div>
+              <div class="compression-null"><span>Uniform A–Z · same length</span><strong id="compressionUniform">—</strong></div>
+              <div class="compression-null"><span>Shuffled · same letters</span><strong id="compressionShuffle">—</strong></div>
+              <div class="stride-status" id="compressionStatus">Select at least 12 letters.</div>
+              <p class="route-caveat">This is evidence of English-like local structure, not a universal compressor or proof of plaintext. The p-values are deterministic Monte Carlo estimates.</p>
             </section>
             <section class="inspector-section period-analysis">
               <div class="section-title"><span>VIGENÈRE PERIOD SCAN</span><button class="info-button" type="button" data-info="Average IC down the vertical columns for each candidate key length" title="Average IC down the vertical columns for each candidate key length" aria-label="Explain Vigenère period scan">i</button></div>
@@ -342,6 +357,6 @@
         </div>
       </div>
     </div>
-    <script type="module" src="app.js?v=20"></script>
+    <script type="module" src="app.js?v=21"></script>
   </body>
 </html>

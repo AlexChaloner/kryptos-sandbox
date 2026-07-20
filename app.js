@@ -47,6 +47,13 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
   let liveOverlayPreviewSignature = "";
   let liveOverlayAnalysisPreview = null;
   let persistenceWarning = "";
+  let analysisSignalSignature = "";
+  let analysisBaseEvents = [];
+  let compressionWorker = null;
+  let compressionWorkerSignature = "";
+  let compressionTimer = null;
+  let compressionToken = 0;
+  const compressionCache = new Map();
   const STARTER_LIBRARY_VERSION = 1;
   const WORKSPACE_LIBRARY_KEY = "kryptos-workspace-library";
   const WORKSPACE_RECOVERY_KEY = "kryptos-workspace-library-recovery";
@@ -1583,12 +1590,20 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
       $("#icPValue").textContent = "—";
       $("#icReliability").textContent = "—";
       $("#freqPValue").textContent = "—";
+      $("#topIcValue").textContent = "—";
+      $("#topFreqFit").textContent = "—";
+      $("#maxPeriodIc").textContent = "—";
+      $("#maxPeriodLabel").textContent = "—";
       $("#icMeter").style.width = "0";
       $("#freqMeter").style.width = "0";
       $("#frequencyChart").innerHTML = '<div class="chart-placeholder">Select letters to analyse</div>';
       $("#bigramList").innerHTML = "<span>—</span>";
       $("#periodScanList").innerHTML = '<div class="chart-placeholder">Select enough letters to scan</div>';
       $("#periodDetail").classList.add("hidden");
+      clearCompressionAnalysis();
+      analysisSignalSignature = "";
+      analysisBaseEvents = [];
+      renderAnalysisSignal([]);
       return;
     }
 
@@ -1599,6 +1614,8 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
     const nulls = estimateNulls(sequence.length, ic, fit);
     $("#icValue").textContent = ic.toFixed(4);
     $("#freqFit").textContent = `${fit.toFixed(1)}%`;
+    $("#topIcValue").textContent = ic.toFixed(4);
+    $("#topFreqFit").textContent = `${fit.toFixed(1)}%`;
     $("#icPValue").textContent = formatPValue(icSignificance.pValue);
     $("#icReliability").textContent = `${icSignificance.standardError.toFixed(4)} · ${icSignificance.zScore.toFixed(1)}σ`;
     $("#freqPValue").textContent = formatPercent(nulls.fit);
@@ -1606,13 +1623,38 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
     $("#freqMeter").style.width = `${clamp(fit, 0, 100)}%`;
     renderFrequencyChart(counts, sequence.length);
     renderBigrams(sequence);
-    renderPeriodScan(sequence);
+    const periodSummary = renderPeriodScan(sequence);
+    const signature = `${layout?.id || "none"}:${sequence}`;
+    analysisSignalSignature = signature;
+    analysisBaseEvents = [
+      { kind: "IC", label: `overall IC ${ic.toFixed(4)}`, pValue: icSignificance.pValue },
+      { kind: "frequency", label: `English frequency fit ${fit.toFixed(1)}%`, pValue: nulls.fit },
+    ];
+    if (periodSummary.rareCandidate) {
+      const testedPeriods = Math.max(1, periodSummary.scan.length - 1);
+      analysisBaseEvents.push({
+        kind: "period",
+        label: `period ${periodSummary.rareCandidate.period} IC ${periodSummary.rareCandidate.averageIc.toFixed(4)}`,
+        pValue: Math.min(1, periodSummary.rareCandidate.significance.pValue * testedPeriods),
+      });
+    }
+    renderAnalysisSignal(analysisBaseEvents, sequence.length);
+    if ($("#analysisPanel").classList.contains("active")) scheduleCompressionAnalysis(sequence, signature);
   }
 
   function renderPeriodScan(sequence) {
     const maximum = Math.min(Number($("#periodScanMax").value), Math.max(1, Math.floor(sequence.length / 2)));
     $("#periodScanMaxValue").textContent = maximum;
     const scan = scanVigenerePeriods(sequence, maximum, state.alphabet.length || 26);
+    const periodCandidates = scan.filter(candidate => candidate.period > 1);
+    const maxCandidate = periodCandidates.length
+      ? periodCandidates.reduce((best, candidate) => candidate.averageIc > best.averageIc ? candidate : best)
+      : null;
+    const rareCandidate = periodCandidates.length
+      ? periodCandidates.reduce((best, candidate) => candidate.significance.pValue < best.significance.pValue ? candidate : best)
+      : null;
+    $("#maxPeriodIc").textContent = maxCandidate ? maxCandidate.averageIc.toFixed(4) : "—";
+    $("#maxPeriodLabel").textContent = maxCandidate ? `period ${maxCandidate.period}` : "—";
     const signature = `${state.selectedGridId}:${sequence}`;
     if (signature !== analysisSequenceSignature) {
       analysisSequenceSignature = signature;
@@ -1627,6 +1669,93 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
       </button>`;
     }).join("");
     renderPeriodDetail(sequence, analysisPeriod, true);
+    return { scan, maxCandidate, rareCandidate };
+  }
+
+  function renderAnalysisSignal(events, sequenceLength = 0) {
+    $$(".grid-card.analysis-event", workspace).forEach(card => {
+      card.classList.remove("analysis-event");
+      delete card.dataset.analysisSignal;
+    });
+    const signal = $("#analysisSignal");
+    const rarest = sequenceLength >= 12
+      ? events.filter(event => Number.isFinite(event.pValue) && event.pValue < .005).sort((a, b) => a.pValue - b.pValue)[0]
+      : null;
+    if (!rarest) {
+      signal.classList.add("hidden");
+      signal.textContent = "";
+      return;
+    }
+    signal.textContent = `RARE ${rarest.kind.toUpperCase()} SIGNAL · ${rarest.label} · calibrated p ${formatPValue(rarest.pValue)}`;
+    signal.classList.remove("hidden");
+    const card = $(`.grid-card[data-id="${currentGrid()?.id}"]`, workspace);
+    if (card) {
+      card.classList.add("analysis-event");
+      card.dataset.analysisSignal = rarest.kind;
+    }
+  }
+
+  function clearCompressionAnalysis(message = "Select at least 12 letters.") {
+    clearTimeout(compressionTimer);
+    compressionToken++;
+    $("#compressionBpc").textContent = "—";
+    $("#compressionUniform").textContent = "—";
+    $("#compressionShuffle").textContent = "—";
+    $("#compressionStatus").textContent = message;
+  }
+
+  function ensureCompressionWorker() {
+    if (compressionWorker) return compressionWorker;
+    compressionWorker = new Worker("./compression-worker.js?v=1", { type: "module" });
+    compressionWorker.addEventListener("message", event => {
+      const { token, signature, result, error } = event.data;
+      if (token !== compressionToken || signature !== analysisSignalSignature) return;
+      compressionWorkerSignature = "";
+      if (error) {
+        $("#compressionStatus").textContent = error;
+        return;
+      }
+      compressionCache.set(signature, result);
+      if (compressionCache.size > 10) compressionCache.delete(compressionCache.keys().next().value);
+      renderCompressionAnalysis(result, signature);
+    });
+    compressionWorker.addEventListener("error", () => {
+      compressionWorkerSignature = "";
+      $("#compressionStatus").textContent = "English model worker could not start.";
+    });
+    return compressionWorker;
+  }
+
+  function scheduleCompressionAnalysis(sequence, signature) {
+    clearTimeout(compressionTimer);
+    if (sequence.length < 12) return clearCompressionAnalysis();
+    const cached = compressionCache.get(signature);
+    if (cached) return renderCompressionAnalysis(cached, signature);
+    const token = ++compressionToken;
+    $("#compressionStatus").textContent = "English model calibration queued…";
+    compressionTimer = setTimeout(() => {
+      if (compressionWorkerSignature && compressionWorkerSignature !== signature) {
+        compressionWorker?.terminate();
+        compressionWorker = null;
+      }
+      compressionWorkerSignature = signature;
+      $("#compressionStatus").textContent = "Comparing exact-length random and shuffled controls…";
+      ensureCompressionWorker().postMessage({ token, signature, sequence });
+    }, 260);
+  }
+
+  function renderCompressionAnalysis(result, signature) {
+    if (signature !== analysisSignalSignature) return;
+    $("#compressionBpc").textContent = result.bitsPerCharacter.toFixed(2);
+    $("#compressionUniform").textContent = `p ${formatPValue(result.uniform.pValue)} · ${result.uniform.zScore.toFixed(1)}σ`;
+    $("#compressionShuffle").textContent = `p ${formatPValue(result.shuffled.pValue)} · ${result.shuffled.zScore.toFixed(1)}σ`;
+    $("#compressionStatus").textContent = `${result.uniform.trials.toLocaleString()} deterministic trials per control · ${result.bits.toFixed(0)} model bits`;
+    const compressionP = Math.min(1, Math.min(result.uniform.pValue, result.shuffled.pValue) * 2);
+    const source = result.uniform.pValue <= result.shuffled.pValue ? "uniform-null English code" : "same-letter ordering";
+    renderAnalysisSignal([
+      ...analysisBaseEvents,
+      { kind: "compression", label: `${source} ${result.bitsPerCharacter.toFixed(2)} bits/character`, pValue: compressionP },
+    ], result.length);
   }
 
   function renderPeriodDetail(sequence, period, resetKey = false) {
@@ -2387,7 +2516,7 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
     });
     $("#periodScanMax").addEventListener("input", () => {
       const sequence = selectedSequence().replace(/[^A-Z]/g, "");
-      if (sequence.length >= 2) renderPeriodScan(sequence);
+      if (sequence.length >= 2) updateAnalysis();
     });
     $("#periodScanList").addEventListener("click", event => {
       const row = event.target.closest("[data-period]");
