@@ -17,6 +17,7 @@ import { transformSparseIndex, transformSparseText } from "./modules/matrix.js?v
 import { createContextMenuController } from "./modules/context-menu.js";
 import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition-analysis.js";
 import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js";
+import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persistence.js";
 
 (() => {
   "use strict";
@@ -45,7 +46,11 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
   let libraryEditorCommit = null;
   let liveOverlayPreviewSignature = "";
   let liveOverlayAnalysisPreview = null;
+  let persistenceWarning = "";
   const STARTER_LIBRARY_VERSION = 1;
+  const WORKSPACE_LIBRARY_KEY = "kryptos-workspace-library";
+  const WORKSPACE_RECOVERY_KEY = "kryptos-workspace-library-recovery";
+  const LEGACY_SNAPSHOT_KEY = "kryptos-sandbox-snapshot";
   const LETTER_COLOURS = new Set(["amber", "blue", "coral", "green"]);
 
   const state = {
@@ -333,14 +338,16 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
     return library;
   }
 
-  function saveActiveWorkspaceState() {
+  function saveActiveWorkspaceState({ includeHistory = true } = {}) {
     if (!state.activeWorkspaceId) return;
     const workspaceEntry = state.workspaces.find(item => item.id === state.activeWorkspaceId);
     if (!workspaceEntry) return;
     workspaceEntry.name = $("#workspaceTitle").textContent;
     workspaceEntry.document = cloneSerializable(captureSnapshot());
-    workspaceEntry.history = cloneSerializable(state.history);
-    workspaceEntry.future = cloneSerializable(state.future);
+    if (includeHistory) {
+      workspaceEntry.history = cloneSerializable(state.history);
+      workspaceEntry.future = cloneSerializable(state.future);
+    }
   }
 
   function initializeWorkspaceLibrary() {
@@ -459,21 +466,46 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
   }
 
   let librarySaveTimer = null;
+  function persistWorkspaceLibraryNow({ notify = true } = {}) {
+    if (!state.activeWorkspaceId) return;
+    clearTimeout(librarySaveTimer);
+    librarySaveTimer = null;
+    saveActiveWorkspaceState({ includeHistory: false });
+    try { localStorage.removeItem(LEGACY_SNAPSHOT_KEY); } catch {}
+    const result = writeWorkspaceLibrary({
+      local: localStorage,
+      session: sessionStorage,
+      key: WORKSPACE_LIBRARY_KEY,
+      recoveryKey: WORKSPACE_RECOVERY_KEY,
+      library: serializeWorkspaceLibrary(),
+    });
+    const warning = result.storage === "session"
+      ? "Browser storage is full · this tab has a refresh-safe recovery copy"
+      : result.storage === "failed"
+        ? "Workspace could not be saved · browser storage is unavailable"
+        : "";
+    if (warning && warning !== persistenceWarning && notify) toast(warning, 5200);
+    if (warning && notify) setStatus(warning);
+    if (notify || !warning) persistenceWarning = warning;
+    return result;
+  }
+
   function scheduleLibraryPersistence() {
     if (!state.activeWorkspaceId) return;
     clearTimeout(librarySaveTimer);
-    librarySaveTimer = setTimeout(() => {
-      saveActiveWorkspaceState();
-      localStorage.setItem("kryptos-workspace-library", JSON.stringify(serializeWorkspaceLibrary()));
-    }, 120);
+    librarySaveTimer = setTimeout(() => persistWorkspaceLibraryNow(), 120);
   }
 
   function loadWorkspaceLibrary() {
     try {
-      const raw = localStorage.getItem("kryptos-workspace-library");
+      const { raw } = readWorkspaceLibrary({
+        local: localStorage,
+        session: sessionStorage,
+        key: WORKSPACE_LIBRARY_KEY,
+        recoveryKey: WORKSPACE_RECOVERY_KEY,
+      });
       if (!raw) return false;
       const parsedLibrary = JSON.parse(raw);
-      const needsUpgrade = (parsedLibrary.starterVersion || 0) < STARTER_LIBRARY_VERSION;
       const library = upgradeWorkspaceLibrary(parsedLibrary);
       if (!library.folders?.length || !library.workspaces?.length) return false;
       state.folders = library.folders;
@@ -486,7 +518,7 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
       state.future = active.future || [];
       restoreSnapshot(active.document);
       renderWorkspaceTree();
-      if (needsUpgrade) localStorage.setItem("kryptos-workspace-library", JSON.stringify(serializeWorkspaceLibrary()));
+      scheduleLibraryPersistence();
       return true;
     } catch { return false; }
   }
@@ -2101,7 +2133,7 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
 
   function loadSnapshot() {
     try {
-      const raw = localStorage.getItem("kryptos-sandbox-snapshot");
+      const raw = localStorage.getItem(LEGACY_SNAPSHOT_KEY);
       if (!raw) return false;
       const snapshot = JSON.parse(raw);
       state.grids = snapshot.grids.map(grid => ({
@@ -2633,12 +2665,16 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
       copiedGridClipboard = null;
       pasteIntoGrid(plainText);
     });
+    window.addEventListener("pagehide", () => persistWorkspaceLibraryNow({ notify: false }));
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") persistWorkspaceLibraryNow({ notify: false });
+    });
   }
 
   function enableLiveReload() {
     const developmentHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
     if (!developmentHosts.has(location.hostname)) return;
-    const sources = ["index.html", "styles.css", "app.js", "modules/cipher.js", "modules/overlay.js", "modules/analysis.js", "modules/transposition-analysis.js", "modules/utils.js", "modules/matrix.js", "modules/context-menu.js"];
+    const sources = ["index.html", "styles.css", "app.js", "modules/cipher.js", "modules/overlay.js", "modules/analysis.js", "modules/transposition-analysis.js", "modules/grid-analysis.js", "modules/persistence.js", "modules/utils.js", "modules/matrix.js", "modules/context-menu.js"];
     let baseline = null;
     const fingerprint = async () => {
       const parts = await Promise.all(sources.map(async source => {

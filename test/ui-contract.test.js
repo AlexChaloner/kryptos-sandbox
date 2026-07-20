@@ -85,3 +85,10 @@ test("analysis follows preview and persisted live-overlay results", () => {
   assert.match(app, /setLiveOverlayAnalysisPreview\(resolved, overlay\)/);
   assert.match(app, /LIVE OVERLAY · \$\{layout\.label\}/);
 });
+
+test("workspace persistence flushes on tab lifecycle events and handles storage failure", () => {
+  assert.match(app, /window\.addEventListener\("pagehide"/);
+  assert.match(app, /document\.addEventListener\("visibilitychange"/);
+  assert.match(app, /writeWorkspaceLibrary\(/);
+  assert.match(app, /refresh-safe recovery copy/);
+});
