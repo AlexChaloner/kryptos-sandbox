@@ -44,6 +44,7 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
   let copiedGridClipboard = null;
   let libraryEditorCommit = null;
   let liveOverlayPreviewSignature = "";
+  let liveOverlayAnalysisPreview = null;
   const STARTER_LIBRARY_VERSION = 1;
   const LETTER_COLOURS = new Set(["amber", "blue", "coral", "green"]);
 
@@ -752,6 +753,7 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
     card.classList.add("dragging");
     card.setPointerCapture?.(event.pointerId);
     clearLiveOverlay(card);
+    clearLiveOverlayAnalysisPreview(grid.id);
 
     let dragFrame = null;
     const updatePosition = (clientX, clientY, preview = true) => {
@@ -795,6 +797,7 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
       card.classList.remove("dragging");
       $$(".grid-card.preview-a, .grid-card.preview-b, .grid-card.drop-target", workspace).forEach(element => element.classList.remove("preview-a", "preview-b", "drop-target"));
       clearLiveOverlay(card);
+      clearLiveOverlayAnalysisPreview(grid.id);
       if (endEvent?.type === "pointercancel") {
         state.moving = null;
         restoreSnapshot(historyBefore);
@@ -889,13 +892,43 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
     });
   }
 
+  function overlayAnalysisLabel(operation) {
+    if (operation === "subtract") return "A − B";
+    if (operation === "reverseSubtract") return "B − A";
+    return "A + B";
+  }
+
+  function setLiveOverlayAnalysisPreview(resolved, overlay) {
+    const layout = materializedOverlayLayout(resolved.combined);
+    liveOverlayAnalysisPreview = {
+      id: `preview:${overlay.id}`,
+      gridId: overlay.id,
+      text: layout.text,
+      cols: layout.columns,
+      isOverlay: true,
+      label: overlayAnalysisLabel(resolved.operation),
+    };
+    if ($("#analysisPanel").classList.contains("active")) updateAnalysis();
+  }
+
+  function clearLiveOverlayAnalysisPreview(gridId = null) {
+    if (!liveOverlayAnalysisPreview || (gridId && liveOverlayAnalysisPreview.gridId !== gridId)) return;
+    liveOverlayAnalysisPreview = null;
+    if ($("#analysisPanel").classList.contains("active")) updateAnalysis();
+  }
+
   function renderLiveOverlay(base, overlay, overlayCard) {
     if (!base) {
       if (liveOverlayPreviewSignature) clearLiveOverlay(overlayCard);
+      clearLiveOverlayAnalysisPreview(overlay.id);
       return;
     }
     const baseCard = $(`.grid-card[data-id="${base.id}"]`, workspace);
-    if (!baseCard) return clearLiveOverlay(overlayCard);
+    if (!baseCard) {
+      clearLiveOverlay(overlayCard);
+      clearLiveOverlayAnalysisPreview(overlay.id);
+      return;
+    }
     [$(".grid-card-body", baseCard), $(".grid-card-body", overlayCard)].forEach(body => {
       if (!body) return;
       body.scrollLeft = 0;
@@ -903,7 +936,11 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
     });
     const baseFirstCell = $(".letter-cell", baseCard);
     const overlayFirstCell = $(".letter-cell", overlayCard);
-    if (!baseFirstCell || !overlayFirstCell) return clearLiveOverlay(overlayCard);
+    if (!baseFirstCell || !overlayFirstCell) {
+      clearLiveOverlay(overlayCard);
+      clearLiveOverlayAnalysisPreview(overlay.id);
+      return;
+    }
     const baseFirstRect = baseFirstCell.getBoundingClientRect();
     const overlayFirstRect = overlayFirstCell.getBoundingClientRect();
     const deltaX = overlayFirstRect.left - baseFirstRect.left;
@@ -920,6 +957,7 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
     });
     if (!alignment) {
       if (liveOverlayPreviewSignature) clearLiveOverlay(overlayCard);
+      clearLiveOverlayAnalysisPreview(overlay.id);
       return;
     }
     const operation = $("#combineOperation").value;
@@ -936,7 +974,10 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
       operation,
     });
     const resolved = resolveOverlayLink(previewLink, [base, overlay], state.alphabet);
-    if (resolved) applyLiveOverlayResult(resolved, overlayCard);
+    if (resolved) {
+      applyLiveOverlayResult(resolved, overlayCard);
+      setLiveOverlayAnalysisPreview(resolved, overlay);
+    } else clearLiveOverlayAnalysisPreview(overlay.id);
   }
 
   function activateLiveOverlay(base, overlay) {
@@ -1452,34 +1493,57 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
     updateAnalysis();
   }
 
-  function selectedSequence() {
+  function currentAnalysisLayout() {
     const grid = currentGrid();
-    if (!grid) return "";
-    if (!grid.selected.size) return grid.text;
-    return orderedSelectionIndices(grid).map(index => grid.text[index]).join("");
+    if (!grid) return null;
+    if (liveOverlayAnalysisPreview?.gridId === grid.id) return liveOverlayAnalysisPreview;
+    const gridIsMoving = state.moving?.grid.id === grid.id;
+    const link = !gridIsMoving ? [...state.overlays].reverse().find(item => item.overlayId === grid.id) : null;
+    const resolved = link ? resolveOverlayLink(link, state.grids, state.alphabet) : null;
+    if (resolved) {
+      const layout = materializedOverlayLayout(resolved.combined);
+      return {
+        id: `overlay:${link.id}`,
+        gridId: grid.id,
+        text: layout.text,
+        cols: layout.columns,
+        isOverlay: true,
+        label: overlayAnalysisLabel(resolved.operation),
+      };
+    }
+    return { id: grid.id, gridId: grid.id, text: grid.text, cols: grid.cols, isOverlay: false, label: "" };
   }
 
-  function orderedSelectionIndices(grid) {
+  function selectedSequence(layout = currentAnalysisLayout()) {
+    const grid = currentGrid();
+    if (!grid || !layout) return "";
+    if (!grid.selected.size) return layout.text;
+    return orderedSelectionIndices(grid, layout.cols, layout.text.length).map(index => layout.text[index]).join("");
+  }
+
+  function orderedSelectionIndices(grid, columns = grid.cols, textLength = grid.text.length) {
     const indices = [...grid.selected];
     if (grid.selectionOrientation !== "vertical") return indices.sort((a, b) => a - b);
-    const rows = Math.ceil(grid.text.length / grid.cols);
+    const rows = Math.ceil(textLength / columns);
     return indices.sort((a, b) => {
-      const aOrdinal = (a % grid.cols) * rows + Math.floor(a / grid.cols);
-      const bOrdinal = (b % grid.cols) * rows + Math.floor(b / grid.cols);
+      const aOrdinal = (a % columns) * rows + Math.floor(a / columns);
+      const bOrdinal = (b % columns) * rows + Math.floor(b / columns);
       return aOrdinal - bOrdinal;
     });
   }
 
   function updateAnalysis() {
-    const sequence = selectedSequence().replace(/[^A-Z]/g, "");
+    const layout = currentAnalysisLayout();
+    const sequence = selectedSequence(layout).replace(/[^A-Z]/g, "");
     const grid = currentGrid();
+    $("#analysisContext").textContent = layout?.isOverlay ? `LIVE OVERLAY · ${layout.label}` : grid?.selected.size ? "CURRENT SELECTION" : "CURRENT GRID";
     $("#analyseAll").textContent = grid?.selected.size ? "Clear selection" : "Full grid";
     $("#analyseAll").disabled = !grid?.selected.size;
     $("#analysisSequence").textContent = sequence || "—";
     $("#analysisLength").textContent = `${sequence.length} character${sequence.length === 1 ? "" : "s"}`;
     if ($("#analysisPanel").classList.contains("active")) {
       scheduleModularStrideScan(sequence);
-      scheduleGridShapeScan(grid);
+      scheduleGridShapeScan(layout);
     }
     if (sequence.length < 2) {
       $("#icValue").textContent = "—";
@@ -1571,26 +1635,26 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
     $("#gridRouteDetail").classList.add("hidden");
   }
 
-  function scheduleGridShapeScan(grid = currentGrid()) {
+  function scheduleGridShapeScan(layout = currentAnalysisLayout()) {
     clearTimeout(gridShapeScanTimer);
-    const length = grid ? grid.text.replace(/[^A-Z]/g, "").length : 0;
-    if (!grid || length < 4) return clearGridShapeScan();
-    const signature = JSON.stringify({ id: grid.id, text: grid.text, columns: grid.cols });
+    const length = layout ? layout.text.replace(/[^A-Z]/g, "").length : 0;
+    if (!layout || length < 4) return clearGridShapeScan();
+    const signature = JSON.stringify({ id: layout.id, text: layout.text, columns: layout.cols });
     if (signature === gridShapeLastSignature && gridDiagnosticScan) return;
     gridDiagnosticSelectedId = null;
     const token = ++gridShapeScanToken;
     $("#gridDiagnosticStatus").textContent = "Grid changed · line scan queued…";
     $("#gridRouteStatus").textContent = length >= 8 ? "Grid changed · route scan queued…" : "Select a grid with at least eight letters.";
-    gridShapeScanTimer = setTimeout(() => runGridShapeScan(grid, length, signature, token), 240);
+    gridShapeScanTimer = setTimeout(() => runGridShapeScan(layout, length, signature, token), 240);
   }
 
-  async function runGridShapeScan(grid, length, signature, token) {
+  async function runGridShapeScan(layout, length, signature, token) {
     $("#gridDiagnosticStatus").textContent = "Scoring rows, columns, and diagonals…";
     if (length >= 8) $("#gridRouteStatus").textContent = "Scoring shape-aware routes…";
     try {
       const [diagnostics, routes] = await Promise.all([
-        scanGridDiagnostics(grid.text, grid.cols),
-        length >= 8 ? scanGridRoutes(grid.text, grid.cols) : Promise.resolve(null),
+        scanGridDiagnostics(layout.text, layout.cols),
+        length >= 8 ? scanGridRoutes(layout.text, layout.cols) : Promise.resolve(null),
       ]);
       if (token !== gridShapeScanToken) return;
       gridShapeLastSignature = signature;

@@ -40,8 +40,8 @@ test("analysis sidebar exposes physical-line diagnostics and shape-aware routes"
   assert.match(html, /id="gridDiagnosticList"/);
   assert.match(html, /id="gridRouteResults"/);
   assert.match(html, /id="createGridRoute"/);
-  assert.match(app, /scanGridDiagnostics\(grid\.text, grid\.cols\)/);
-  assert.match(app, /scanGridRoutes\(grid\.text, grid\.cols\)/);
+  assert.match(app, /scanGridDiagnostics\(layout\.text, layout\.cols\)/);
+  assert.match(app, /scanGridRoutes\(layout\.text, layout\.cols\)/);
   assert.match(app, /grid\.selected = new Set\(candidate\.indices\)/);
 });
 
@@ -74,4 +74,14 @@ test("creating from a live overlay produces an independent snapshot", () => {
   assert.match(app, /derived: link \? null : \{ baseId:/);
   assert.match(app, /derived: grid\.derived\?\.alignment \? null :/);
   assert.match(app, /independent snapshot/);
+});
+
+test("analysis follows preview and persisted live-overlay results", () => {
+  assert.match(html, /id="analysisContext"/);
+  assert.match(app, /liveOverlayAnalysisPreview\?\.gridId === grid\.id/);
+  assert.match(app, /item => item\.overlayId === grid\.id/);
+  assert.match(app, /materializedOverlayLayout\(resolved\.combined\)/);
+  assert.match(app, /orderedSelectionIndices\(grid, layout\.cols, layout\.text\.length\)\.map\(index => layout\.text\[index\]\)/);
+  assert.match(app, /setLiveOverlayAnalysisPreview\(resolved, overlay\)/);
+  assert.match(app, /LIVE OVERLAY · \$\{layout\.label\}/);
 });
