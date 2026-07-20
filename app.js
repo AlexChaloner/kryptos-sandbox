@@ -1616,7 +1616,7 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
     $("#freqFit").textContent = `${fit.toFixed(1)}%`;
     $("#topIcValue").textContent = ic.toFixed(4);
     $("#topFreqFit").textContent = `${fit.toFixed(1)}%`;
-    $("#icPValue").textContent = formatPValue(icSignificance.pValue);
+    $("#icPValue").textContent = formatPValue(icSignificance.twoSidedPValue);
     $("#icReliability").textContent = `${icSignificance.standardError.toFixed(4)} · ${icSignificance.zScore.toFixed(1)}σ`;
     $("#freqPValue").textContent = formatPercent(nulls.fit);
     $("#icMeter").style.width = `${clamp(ic / .1 * 100, 0, 100)}%`;
@@ -1627,7 +1627,7 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
     const signature = `${layout?.id || "none"}:${sequence}`;
     analysisSignalSignature = signature;
     analysisBaseEvents = [
-      { kind: "IC", label: `overall IC ${ic.toFixed(4)}`, pValue: icSignificance.pValue },
+      { kind: "IC", label: `overall IC ${ic.toFixed(4)}`, pValue: icSignificance.twoSidedPValue },
       { kind: "frequency", label: `English frequency fit ${fit.toFixed(1)}%`, pValue: nulls.fit },
     ];
     if (periodSummary.rareCandidate) {

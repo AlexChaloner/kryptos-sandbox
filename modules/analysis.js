@@ -93,6 +93,13 @@ function normalSurvival(zScore) {
   return 1 - cdf;
 }
 
+function noCollisionProbability(length, alphabetSize) {
+  if (length > alphabetSize) return 0;
+  let probability = 1;
+  for (let index = 0; index < length; index++) probability *= (alphabetSize - index) / alphabetSize;
+  return probability;
+}
+
 export function coincidenceSignificance(observedIc, sampleSizes, alphabetSize = 26) {
   const lengths = (Array.isArray(sampleSizes) ? sampleSizes : [sampleSizes]).filter(length => length >= 2);
   const nullMean = 1 / alphabetSize;
@@ -101,11 +108,18 @@ export function coincidenceSignificance(observedIc, sampleSizes, alphabetSize = 
     ? Math.sqrt(columnVariances.reduce((sum, variance) => sum + variance, 0)) / lengths.length
     : Infinity;
   const zScore = standardError > 0 && Number.isFinite(standardError) ? (observedIc - nullMean) / standardError : 0;
+  const upperPValue = normalSurvival(zScore);
+  const lowerPValue = observedIc === 0
+    ? lengths.reduce((probability, length) => probability * noCollisionProbability(length, alphabetSize), 1)
+    : normalSurvival(-zScore);
   return {
     nullMean,
     standardError,
     zScore,
-    pValue: normalSurvival(zScore),
+    pValue: upperPValue,
+    upperPValue,
+    lowerPValue,
+    twoSidedPValue: Math.min(1, 2 * Math.min(lowerPValue, upperPValue)),
     nullLower95: Math.max(0, nullMean - 1.96 * standardError),
     nullUpper95: Math.min(1, nullMean + 1.96 * standardError),
   };

@@ -98,6 +98,12 @@ test("analysis exposes headline period IC, conditional English coding, and rare 
   assert.match(styles, /prefers-reduced-motion/);
 });
 
+test("overall IC is two-sided while period scans remain upper-tailed", () => {
+  assert.match(html, /Two-sided random likelihood/);
+  assert.match(app, /icSignificance\.twoSidedPValue/);
+  assert.match(app, /periodSummary\.rareCandidate\.significance\.pValue/);
+});
+
 test("workspace persistence flushes on tab lifecycle events and handles storage failure", () => {
   assert.match(app, /window\.addEventListener\("pagehide"/);
   assert.match(app, /document\.addEventListener\("visibilitychange"/);
