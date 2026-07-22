@@ -3,7 +3,8 @@ import {
   K1_PLAINTEXT, K2_PLAINTEXT, K3_PLAINTEXT,
   KRYPTOS_LEFT_PLATE, KRYPTOS_LEFT_PLATE_COLUMNS, KRYPTOS_RIGHT_PLATE, KRYPTOS_RIGHT_PLATE_COLUMNS,
   cleanText, cleanUnique, positionalK4Cribs, randomEnglishBookSample, randomLetters, combineAlignedCipherText, combineCipherText,
-} from "./modules/cipher.js?v=7";
+  gridDifferenceLayout,
+} from "./modules/cipher.js?v=8";
 import {
   alignmentFromCellGeometry, compactSparseLayout, createOverlayLink, findOverlayLink, normalizeOverlayLinks,
   materializedOverlayLayout, overlayPosition, removeCyclicOverlayLinks, removeOverlayLinksForGrid, resolveOverlayLink,
@@ -18,6 +19,7 @@ import { createContextMenuController } from "./modules/context-menu.js";
 import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition-analysis.js";
 import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js";
 import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persistence.js";
+import { createGridBundle, instantiateGridBundle } from "./modules/grid-clipboard.js";
 
 (() => {
   "use strict";
@@ -58,7 +60,8 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
   const WORKSPACE_LIBRARY_KEY = "kryptos-workspace-library";
   const WORKSPACE_RECOVERY_KEY = "kryptos-workspace-library-recovery";
   const LEGACY_SNAPSHOT_KEY = "kryptos-sandbox-snapshot";
-  const LETTER_COLOURS = new Set(["amber", "blue", "coral", "green"]);
+  const LETTER_COLOURS = new Set(["amber", "blue", "coral", "green", "violet", "rose", "cyan"]);
+  const GRID_BUNDLE_MIME = "application/x-kryptos-grids";
 
   const state = {
     grids: [],
@@ -620,10 +623,12 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
   function renderGrid(grid) {
     const card = document.createElement("article");
     const operandIndex = state.selectedGridIds.indexOf(grid.id);
+    const showOperand = operandIndex >= 0 && state.selectedGridIds.length <= 2;
     const isOverlayTop = state.overlays.some(overlay => overlay.overlayId === grid.id);
     card.className = `grid-card${operandIndex >= 0 ? " selected" : ""}${grid.id === state.selectedGridId ? " primary" : ""}${isOverlayTop ? " overlay-top" : ""}`;
     card.dataset.id = grid.id;
-    if (operandIndex >= 0) card.dataset.operand = String.fromCharCode(65 + operandIndex);
+    if (showOperand) card.dataset.operand = String.fromCharCode(65 + operandIndex);
+    const difference = gridDifferenceLayout(grid.text, grid.cols, grid.differenceView, state.alphabet);
     const minimumWidth = grid.cellSize + 20;
     const contentHeight = gridMinimumHeight(grid);
     const minimumHeight = gridMinimumHeightForRows(grid, 1);
@@ -636,6 +641,7 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
         <span class="grid-card-title">${escapeHtml(grid.name)}</span>
         ${grid.syncSourceId ? '<span class="sync-badge">SYNC</span>' : ""}
         ${(grid.derived || state.overlays.some(overlay => overlay.overlayId === grid.id)) ? '<span class="live-badge">LIVE</span>' : ""}
+        ${grid.differenceView === "horizontal" ? '<span class="difference-badge">ΔH</span>' : grid.differenceView === "vertical" ? '<span class="difference-badge">ΔV</span>' : ""}
         <span class="grid-dimensions">${grid.cols} × ${Math.ceil(grid.text.length / grid.cols)}</span>
         <button class="grid-menu" title="Grid options">•••</button>
       </div>
@@ -644,16 +650,17 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
       </div>
       <div class="grid-resize-handle" title="Resize and reshape grid" aria-label="Resize grid"></div>`;
     const letterGrid = $(".letter-grid", card);
-    [...grid.text].forEach((letter, index) => {
+    [...difference.text].forEach((letter, index) => {
       const cell = document.createElement("div");
       const isEmpty = !letter || letter === " ";
       const isUnknown = letter === "?";
-      const highlight = grid.highlights?.[index];
-      cell.className = `letter-cell${isEmpty ? " empty" : ""}${isUnknown ? " unknown" : ""}${highlight ? ` highlight-${highlight}` : ""}${grid.selected.has(index) ? " selected" : ""}`;
+      const highlight = isEmpty ? null : grid.highlights?.[index];
+      cell.className = `letter-cell${isEmpty ? " empty" : ""}${isUnknown ? " unknown" : ""}${grid.differenceView && !isEmpty ? " difference-cell" : ""}${highlight ? ` highlight-${highlight}` : ""}${grid.selected.has(index) ? " selected" : ""}`;
       cell.dataset.index = index;
       cell.style.width = `${grid.cellSize}px`;
       cell.style.height = `${grid.cellSize}px`;
       cell.textContent = letter;
+      if (difference.formulas[index]) cell.title = difference.formulas[index];
       if ($("#showIndices").checked && !isEmpty) {
         const alphabetIndex = state.alphabet.indexOf(letter);
         const value = alphabetIndex < 0 ? "–" : alphabetIndex;
@@ -754,7 +761,7 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
         state.selectedGridIds = state.selectedGridIds.filter(gridId => gridId !== id);
         primaryId = state.selectedGridIds.at(-1);
       }
-      else if (!alreadySelected) state.selectedGridIds = [...state.selectedGridIds.slice(-1), id];
+      else if (!alreadySelected) state.selectedGridIds = [...state.selectedGridIds, id];
     } else {
       state.selectedGridIds = [id];
     }
@@ -766,7 +773,7 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
       const index = state.selectedGridIds.indexOf(card.dataset.id);
       card.classList.toggle("selected", index >= 0);
       card.classList.toggle("primary", card.dataset.id === primaryId);
-      if (index >= 0) card.dataset.operand = String.fromCharCode(65 + index);
+      if (index >= 0 && state.selectedGridIds.length <= 2) card.dataset.operand = String.fromCharCode(65 + index);
       else delete card.dataset.operand;
       if (card.dataset.id === primaryId) card.style.zIndex = grid.z;
     });
@@ -957,6 +964,11 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
   }
 
   function renderLiveOverlay(base, overlay, overlayCard) {
+    if (overlay.differenceView) {
+      clearLiveOverlay(overlayCard);
+      clearLiveOverlayAnalysisPreview(overlay.id);
+      return;
+    }
     if (!base) {
       if (liveOverlayPreviewSignature) clearLiveOverlay(overlayCard);
       clearLiveOverlayAnalysisPreview(overlay.id);
@@ -1068,7 +1080,7 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
       if (!resolved) return;
       const { overlay } = resolved;
       const overlayCard = $(`.grid-card[data-id="${link.overlayId}"]`, workspace);
-      if (!overlay || !overlayCard) return;
+      if (!overlay || !overlayCard || overlay.differenceView) return;
       applyLiveOverlayResult(resolved, overlayCard);
     });
   }
@@ -1086,6 +1098,7 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
   }
 
   function activeOverlayLink(operands = state.selectedGridIds.map(id => state.grids.find(grid => grid.id === id)).filter(Boolean)) {
+    if (operands.length > 2) return null;
     const selectedLink = overlayLinkForOperands(operands[0], operands[1]);
     if (selectedLink || operands.length >= 2) return selectedLink;
     return overlayLinkForGrid(state.selectedGridId);
@@ -1506,9 +1519,10 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
 
   function updateInspector() {
     const grid = currentGrid();
-    state.selectedGridIds = state.selectedGridIds.filter(id => state.grids.some(item => item.id === id)).slice(0, 2);
-    const selectedOperands = state.selectedGridIds.map(id => state.grids.find(item => item.id === id)).filter(Boolean);
-    const link = activeOverlayLink(selectedOperands);
+    state.selectedGridIds = state.selectedGridIds.filter(id => state.grids.some(item => item.id === id));
+    const selectedGrids = state.selectedGridIds.map(id => state.grids.find(item => item.id === id)).filter(Boolean);
+    const selectedOperands = selectedGrids.length <= 2 ? selectedGrids : [];
+    const link = selectedGrids.length <= 2 ? activeOverlayLink(selectedOperands) : null;
     const resolvedLink = link ? resolveOverlayLink(link, state.grids, state.alphabet) : null;
     const operands = resolvedLink ? [resolvedLink.operandA, resolvedLink.operandB] : selectedOperands;
     $("#operandA").textContent = operands[0]?.name || "Select first grid";
@@ -1528,6 +1542,10 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
     $("#gridText").value = grid?.text || "";
     const canColour = Boolean(grid && [...grid.selected].some(index => grid.text[index] && grid.text[index] !== " "));
     $$(".letter-colour-button").forEach(button => { button.disabled = !canColour; });
+    $$("#differenceView button").forEach(button => {
+      button.disabled = !grid;
+      button.classList.toggle("active", button.dataset.differenceView === (grid?.differenceView || "off"));
+    });
     updateAlphabetPreview();
     updateAnalysis();
   }
@@ -1535,6 +1553,18 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
   function currentAnalysisLayout() {
     const grid = currentGrid();
     if (!grid) return null;
+    if (grid.differenceView) {
+      const difference = gridDifferenceLayout(grid.text, grid.cols, grid.differenceView, state.alphabet);
+      return {
+        id: `${grid.id}:difference:${grid.differenceView}:${state.alphabet}`,
+        gridId: grid.id,
+        text: difference.text,
+        cols: grid.cols,
+        isOverlay: false,
+        isDifference: true,
+        label: grid.differenceView === "horizontal" ? "HORIZONTAL DIFFERENCE" : "VERTICAL DIFFERENCE",
+      };
+    }
     if (liveOverlayAnalysisPreview?.gridId === grid.id) return liveOverlayAnalysisPreview;
     const gridIsMoving = state.moving?.grid.id === grid.id;
     const link = !gridIsMoving ? [...state.overlays].reverse().find(item => item.overlayId === grid.id) : null;
@@ -1550,7 +1580,15 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
         label: overlayAnalysisLabel(resolved.operation),
       };
     }
-    return { id: grid.id, gridId: grid.id, text: grid.text, cols: grid.cols, isOverlay: false, label: "" };
+    return {
+      id: grid.id,
+      gridId: grid.id,
+      text: grid.text,
+      cols: grid.cols,
+      isOverlay: false,
+      isDifference: false,
+      label: "",
+    };
   }
 
   function selectedSequence(layout = currentAnalysisLayout()) {
@@ -1575,7 +1613,7 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
     const layout = currentAnalysisLayout();
     const sequence = selectedSequence(layout).replace(/[^A-Z]/g, "");
     const grid = currentGrid();
-    $("#analysisContext").textContent = layout?.isOverlay ? `LIVE OVERLAY · ${layout.label}` : grid?.selected.size ? "CURRENT SELECTION" : "CURRENT GRID";
+    $("#analysisContext").textContent = layout?.isOverlay ? `LIVE OVERLAY · ${layout.label}` : layout?.isDifference ? layout.label : grid?.selected.size ? "CURRENT SELECTION" : "CURRENT GRID";
     $("#analyseAll").textContent = grid?.selected.size ? "Clear selection" : "Full grid";
     $("#analyseAll").disabled = !grid?.selected.size;
     $("#analysisSequence").textContent = sequence || "—";
@@ -1994,7 +2032,7 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
   function updateStatus() {
     const grid = currentGrid();
     $("#gridCount").textContent = `${state.grids.length} grid${state.grids.length === 1 ? "" : "s"}`;
-    $("#selectionCount").textContent = state.selectedGridIds.length > 1 ? `${state.selectedGridIds.length} operand grids selected` : grid?.selected.size ? `${grid.selected.size} cells selected` : "No cell selection";
+    $("#selectionCount").textContent = state.selectedGridIds.length > 1 ? `${state.selectedGridIds.length} grids selected` : grid?.selected.size ? `${grid.selected.size} cells selected` : state.selectedGridIds.length === 1 ? "1 grid selected" : "No selection";
   }
 
   function setStatus(message) {
@@ -2061,6 +2099,38 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
     $("#zoomLabel").textContent = `${Math.round(state.zoom * 100)}%`;
   }
 
+  function setWorkspaceZoom(nextZoom, anchor = null) {
+    const previousZoom = state.zoom;
+    const next = clamp(Math.round(nextZoom * 100) / 100, .5, 2);
+    if (next === previousZoom) return false;
+    const anchorCard = anchor?.target?.closest?.(".grid-card")
+      || (anchor ? $(`.grid-card[data-id="${currentGrid()?.id}"]`, workspace) : null);
+    const beforeRect = anchorCard?.getBoundingClientRect();
+    const local = beforeRect ? {
+      x: (anchor.clientX - beforeRect.left) / previousZoom,
+      y: (anchor.clientY - beforeRect.top) / previousZoom,
+      id: anchorCard.dataset.id,
+    } : null;
+    state.zoom = next;
+    reconcileOverlayState();
+    state.grids.forEach(grid => {
+      const card = $(`.grid-card[data-id="${grid.id}"]`, workspace);
+      if (!card) return;
+      card.style.left = `${grid.x}px`;
+      card.style.top = `${grid.y}px`;
+    });
+    applyZoom();
+    updateWorkspaceExtent();
+    if (local) {
+      const afterRect = $(`.grid-card[data-id="${local.id}"]`, workspace)?.getBoundingClientRect();
+      if (afterRect) {
+        workspace.scrollLeft += afterRect.left + local.x * next - anchor.clientX;
+        workspace.scrollTop += afterRect.top + local.y * next - anchor.clientY;
+      }
+    }
+    return true;
+  }
+
   function copyText(value) {
     if (navigator.clipboard?.writeText) navigator.clipboard.writeText(value).then(() => toast("Copied to clipboard")).catch(() => fallbackCopy(value));
     else fallbackCopy(value);
@@ -2072,10 +2142,40 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
   }
 
   function formatGridForClipboard(grid) {
-    if (grid.selected.size) return orderedSelectionIndices(grid).map(index => grid.text[index]).join("");
+    const visibleText = gridDifferenceLayout(grid.text, grid.cols, grid.differenceView, state.alphabet).text;
+    if (grid.selected.size) return orderedSelectionIndices(grid).map(index => visibleText[index]).join("");
+    return formatWholeGridForClipboard(grid);
+  }
+
+  function formatWholeGridForClipboard(grid) {
+    const visibleText = gridDifferenceLayout(grid.text, grid.cols, grid.differenceView, state.alphabet).text;
     const rows = [];
-    for (let index = 0; index < grid.text.length; index += grid.cols) rows.push(grid.text.slice(index, index + grid.cols));
+    for (let index = 0; index < visibleText.length; index += grid.cols) rows.push(visibleText.slice(index, index + grid.cols));
     return rows.join("\n");
+  }
+
+  function pasteGridBundle(bundle) {
+    const before = captureSnapshot();
+    const cascade = (state.grids.length % 5) * 16;
+    const pasted = instantiateGridBundle(bundle, {
+      anchorX: workspace.scrollLeft + 32 + cascade,
+      anchorY: workspace.scrollTop + 32 + cascade,
+      idFactory: prefix => uniqueId(prefix),
+      nextZ: () => ++state.z,
+    });
+    if (!pasted) return false;
+    pasted.grids.forEach(grid => {
+      grid.selected = new Set();
+      grid.highlights = { ...(grid.highlights || {}) };
+      state.grids.push(grid);
+    });
+    state.overlays.push(...pasted.overlays);
+    state.selectedGridIds = pasted.grids.map(grid => grid.id);
+    state.selectedGridId = state.selectedGridIds.at(-1);
+    renderAll();
+    commitHistory(before, `paste ${pasted.grids.length} grid${pasted.grids.length === 1 ? "" : "s"}`);
+    toast(`Pasted ${pasted.grids.length} grid${pasted.grids.length === 1 ? "" : "s"}`);
+    return true;
   }
 
   function pastedColumnCount(raw, fallback) {
@@ -2303,6 +2403,17 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
     $("#reflectVertical").addEventListener("click", () => transformGrid("reflectVertical"));
     $("#compactGrid").addEventListener("click", compactSelectedGrid);
     $$(".letter-colour-button").forEach(button => button.addEventListener("click", () => colourSelectedLetters(button.dataset.letterColour)));
+    $("#differenceView").addEventListener("click", event => {
+      const button = event.target.closest("[data-difference-view]");
+      const grid = currentGrid();
+      if (!button || !grid) return;
+      const before = captureSnapshot();
+      const view = button.dataset.differenceView;
+      grid.differenceView = view === "off" ? null : view;
+      renderAll();
+      commitHistory(before, `${view === "off" ? "disable" : `show ${view}`} difference view for ${grid.name}`);
+      setStatus(view === "off" ? `Showing source letters in ${grid.name}` : `Showing ${view} forward differences in ${grid.name}`);
+    });
 
     $$(".tool-button[data-mode]").forEach(button => button.addEventListener("click", () => {
       state.tool = button.dataset.mode;
@@ -2329,6 +2440,25 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
       return (verticalWidth > 0 && event.clientX >= bounds.right - verticalWidth)
         || (horizontalHeight > 0 && event.clientY >= bounds.bottom - horizontalHeight);
     };
+    let wheelZoomBefore = null;
+    let wheelZoomTimer = null;
+    workspace.addEventListener("wheel", event => {
+      event.preventDefault();
+      if (!event.deltaY) return;
+      const startedSequence = !wheelZoomBefore;
+      if (!wheelZoomBefore) wheelZoomBefore = captureSnapshot();
+      const changed = setWorkspaceZoom(state.zoom + (event.deltaY < 0 ? .08 : -.08), event);
+      if (!changed) {
+        if (startedSequence) wheelZoomBefore = null;
+        return;
+      }
+      clearTimeout(wheelZoomTimer);
+      wheelZoomTimer = setTimeout(() => {
+        const before = wheelZoomBefore;
+        wheelZoomBefore = null;
+        commitHistory(before, "zoom with mouse wheel");
+      }, 180);
+    }, { passive: false });
     workspace.addEventListener("pointerdown", event => {
       if (event.target.closest(".grid-card")) return;
       if (pointerHitsWorkspaceScrollbar(event)) return;
@@ -2337,17 +2467,82 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
         workspace.classList.add("active-pan");
         return;
       }
-      const hasCellSelections = state.grids.some(grid => grid.selected.size);
-      if (event.button === 0 && (state.selectedGridId || hasCellSelections)) {
-        const before = captureSnapshot();
+      if (event.button !== 0) return;
+      event.preventDefault();
+      const before = captureSnapshot();
+      const bounds = workspace.getBoundingClientRect();
+      const start = {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        contentX: event.clientX - bounds.left + workspace.scrollLeft,
+        contentY: event.clientY - bounds.top + workspace.scrollTop,
+      };
+      const additive = event.ctrlKey || event.metaKey || event.shiftKey;
+      const initialIds = additive ? [...state.selectedGridIds] : [];
+      const marquee = document.createElement("div");
+      marquee.className = "selection-marquee hidden";
+      workspace.appendChild(marquee);
+      workspace.classList.add("marquee-selecting");
+      let moved = false;
+      let hitIds = [];
+
+      const move = moveEvent => {
+        const dx = moveEvent.clientX - start.clientX;
+        const dy = moveEvent.clientY - start.clientY;
+        if (!moved && Math.hypot(dx, dy) < 5) return;
+        moved = true;
+        marquee.classList.remove("hidden");
+        const currentX = moveEvent.clientX - bounds.left + workspace.scrollLeft;
+        const currentY = moveEvent.clientY - bounds.top + workspace.scrollTop;
+        marquee.style.left = `${Math.min(start.contentX, currentX)}px`;
+        marquee.style.top = `${Math.min(start.contentY, currentY)}px`;
+        marquee.style.width = `${Math.abs(currentX - start.contentX)}px`;
+        marquee.style.height = `${Math.abs(currentY - start.contentY)}px`;
+        const selectionBounds = {
+          left: Math.min(start.clientX, moveEvent.clientX),
+          right: Math.max(start.clientX, moveEvent.clientX),
+          top: Math.min(start.clientY, moveEvent.clientY),
+          bottom: Math.max(start.clientY, moveEvent.clientY),
+        };
+        hitIds = $$(".grid-card", workspace).filter(card => {
+          const rect = card.getBoundingClientRect();
+          return rect.right >= selectionBounds.left && rect.left <= selectionBounds.right
+            && rect.bottom >= selectionBounds.top && rect.top <= selectionBounds.bottom;
+        }).map(card => card.dataset.id);
+        $$(".grid-card", workspace).forEach(card => card.classList.toggle("marquee-target", hitIds.includes(card.dataset.id)));
+      };
+      const end = endEvent => {
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", end);
+        document.removeEventListener("pointercancel", end);
+        marquee.remove();
+        workspace.classList.remove("marquee-selecting");
+        $$(".grid-card.marquee-target", workspace).forEach(card => card.classList.remove("marquee-target"));
+        if (endEvent.type === "pointercancel") return restoreSnapshot(before);
         state.grids.forEach(grid => grid.selected.clear());
+        if (moved) {
+          state.selectedGridIds = [...new Set([...initialIds, ...hitIds])];
+          const primary = state.grids.filter(grid => state.selectedGridIds.includes(grid.id)).sort((a, b) => (a.z || 0) - (b.z || 0)).at(-1);
+          state.selectedGridId = primary?.id || null;
+          state.analysisFullGrid = true;
+          renderAll();
+          commitHistory(before, `marquee select ${state.selectedGridIds.length} grids`);
+          setStatus(state.selectedGridIds.length ? `Selected ${state.selectedGridIds.length} grid${state.selectedGridIds.length === 1 ? "" : "s"}` : "No grids inside selection");
+          return;
+        }
+        const hasCanvasSelection = state.selectedGridId || state.selectedGridIds.length || state.grids.some(grid => grid.selected.size);
         state.selectedGridId = null;
         state.selectedGridIds = [];
         state.analysisFullGrid = true;
-        renderAll();
-        commitHistory(before, "clear canvas selection");
-        setStatus("Grid focus and cell selections cleared");
-      }
+        if (hasCanvasSelection) {
+          renderAll();
+          commitHistory(before, "clear canvas selection");
+          setStatus("Grid focus and cell selections cleared");
+        }
+      };
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", end, { once: true });
+      document.addEventListener("pointercancel", end, { once: true });
     });
     workspace.addEventListener("dblclick", event => {
       if (event.target.closest(".grid-card")) return;
@@ -2488,6 +2683,7 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
     });
     $("#runGridOperation").addEventListener("click", () => {
       const selectedOperands = state.selectedGridIds.map(id => state.grids.find(grid => grid.id === id)).filter(Boolean);
+      if (selectedOperands.length > 2) return toast("Select exactly two grids for an A/B operation");
       const link = activeOverlayLink(selectedOperands);
       const resolvedLink = link ? resolveOverlayLink(link, state.grids, state.alphabet) : null;
       const operandA = resolvedLink?.operandA || selectedOperands[0];
@@ -2584,8 +2780,8 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
       addGrid(strideSelectedRoute, `Route N=${strideSelected.step} mod ${strideSelected.modulus}`, { cols: columns });
     });
 
-    $("#zoomIn").addEventListener("click", () => { const before = captureSnapshot(); state.zoom = clamp(state.zoom + .1, .6, 1.5); renderAll(); commitHistory(before, "zoom in"); });
-    $("#zoomOut").addEventListener("click", () => { const before = captureSnapshot(); state.zoom = clamp(state.zoom - .1, .6, 1.5); renderAll(); commitHistory(before, "zoom out"); });
+    $("#zoomIn").addEventListener("click", () => { const before = captureSnapshot(); if (setWorkspaceZoom(state.zoom + .1)) commitHistory(before, "zoom in"); });
+    $("#zoomOut").addEventListener("click", () => { const before = captureSnapshot(); if (setWorkspaceZoom(state.zoom - .1)) commitHistory(before, "zoom out"); });
     $("#helpButton").addEventListener("click", () => $("#helpModal").classList.remove("hidden"));
     $("#closeHelp").addEventListener("click", () => $("#helpModal").classList.add("hidden"));
     $("#helpModal").addEventListener("click", event => { if (event.target.id === "helpModal") event.currentTarget.classList.add("hidden"); });
@@ -2764,12 +2960,20 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
       const grid = currentGrid();
       if (!grid) return;
       event.preventDefault();
-      const plainText = formatGridForClipboard(grid);
+      const selectedGrids = state.selectedGridIds.map(id => state.grids.find(item => item.id === id)).filter(Boolean);
+      const copyingWholeGrids = selectedGrids.length > 1 || !grid.selected.size;
+      const plainText = selectedGrids.length > 1
+        ? selectedGrids.map(formatWholeGridForClipboard).join("\n\n")
+        : formatGridForClipboard(grid);
       event.clipboardData.setData("text/plain", plainText);
-      if (!grid.selected.size && state.selectedGridIds.length === 1) {
-        copiedGridClipboard = { grid: cloneSerializable({ ...grid, selected: [...grid.selected] }), plainText };
-        try { event.clipboardData.setData("application/x-kryptos-grid", JSON.stringify(copiedGridClipboard.grid)); } catch {}
-        toast(`Copied ${grid.cols} × ${Math.ceil(grid.text.length / grid.cols)} grid · paste to duplicate`);
+      if (copyingWholeGrids) {
+        const bundle = createGridBundle(state.grids, selectedGrids.map(item => item.id), state.overlays);
+        copiedGridClipboard = { bundle, plainText };
+        try { event.clipboardData.setData(GRID_BUNDLE_MIME, JSON.stringify(bundle)); } catch {}
+        if (selectedGrids.length === 1) {
+          try { event.clipboardData.setData("application/x-kryptos-grid", JSON.stringify(bundle.grids[0])); } catch {}
+        }
+        toast(`Copied ${selectedGrids.length} grid${selectedGrids.length === 1 ? "" : "s"} · paste to duplicate`);
       } else {
         copiedGridClipboard = null;
         toast(grid.selected.size ? `Copied ${grid.selected.size} selected letters` : `Copied ${grid.cols} × ${Math.ceil(grid.text.length / grid.cols)} grid`);
@@ -2779,14 +2983,18 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
       if (document.activeElement.matches("input, textarea, select, [contenteditable='true']")) return;
       event.preventDefault();
       const plainText = event.clipboardData.getData("text/plain");
+      let clipboardBundle = null;
       let clipboardGrid = null;
       try {
+        const structuredBundle = event.clipboardData.getData(GRID_BUNDLE_MIME);
+        if (structuredBundle) clipboardBundle = JSON.parse(structuredBundle);
         const structured = event.clipboardData.getData("application/x-kryptos-grid");
         if (structured) clipboardGrid = JSON.parse(structured);
       } catch {}
       const normalizedPlainText = plainText.replaceAll("\r\n", "\n");
       const internalMatch = copiedGridClipboard?.plainText.replaceAll("\r\n", "\n") === normalizedPlainText;
-      if (!clipboardGrid && internalMatch) clipboardGrid = copiedGridClipboard.grid;
+      if (!clipboardBundle && internalMatch) clipboardBundle = copiedGridClipboard.bundle;
+      if (clipboardBundle?.grids?.length && pasteGridBundle(clipboardBundle)) return;
       if (clipboardGrid?.text && Number.isFinite(Number(clipboardGrid.cols))) {
         duplicateGrid(clipboardGrid);
         return;
@@ -2803,7 +3011,7 @@ import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persisten
   function enableLiveReload() {
     const developmentHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
     if (!developmentHosts.has(location.hostname)) return;
-    const sources = ["index.html", "styles.css", "app.js", "modules/cipher.js", "modules/overlay.js", "modules/analysis.js", "modules/transposition-analysis.js", "modules/grid-analysis.js", "modules/persistence.js", "modules/utils.js", "modules/matrix.js", "modules/context-menu.js"];
+    const sources = ["index.html", "styles.css", "app.js", "modules/cipher.js", "modules/overlay.js", "modules/analysis.js", "modules/transposition-analysis.js", "modules/grid-analysis.js", "modules/grid-clipboard.js", "modules/persistence.js", "modules/utils.js", "modules/matrix.js", "modules/context-menu.js"];
     let baseline = null;
     const fingerprint = async () => {
       const parts = await Promise.all(sources.map(async source => {

@@ -94,6 +94,30 @@ export function randomLetters(length = 97, random = Math.random) {
   return Array.from({ length: size }, () => NORMAL_ALPHABET[Math.min(25, Math.floor(random() * 26))]).join("");
 }
 
+export function gridDifferenceLayout(text, columns, direction, alphabet = NORMAL_ALPHABET) {
+  const source = String(text || "");
+  const width = Math.max(1, Math.floor(Number(columns) || 1));
+  if (!new Set(["horizontal", "vertical"]).has(direction)) return { text: source, formulas: Array(source.length).fill("") };
+  const output = Array(source.length).fill(" ");
+  const formulas = Array(source.length).fill("");
+  for (let index = 0; index < source.length; index++) {
+    const previousIndex = direction === "horizontal" ? index - 1 : index - width;
+    const boundary = direction === "horizontal" ? index % width === 0 : index < width;
+    if (boundary || previousIndex < 0) continue;
+    const current = source[index];
+    const previous = source[previousIndex];
+    if (current === " " || previous === " ") continue;
+    const currentValue = alphabet.indexOf(current);
+    const previousValue = alphabet.indexOf(previous);
+    const difference = currentValue < 0 || previousValue < 0
+      ? "?"
+      : alphabet[(currentValue - previousValue + alphabet.length) % alphabet.length];
+    output[index] = difference;
+    formulas[index] = `${current} − ${previous} = ${difference}`;
+  }
+  return { text: output.join(""), formulas };
+}
+
 export const GRID_OPERATIONS = {
   add: { symbol: "⊕", label: "add A + B", calculate: (a, b, length) => (a + b) % length },
   subtract: { symbol: "−", label: "subtract A − B", calculate: (a, b, length) => (a - b + length) % length },

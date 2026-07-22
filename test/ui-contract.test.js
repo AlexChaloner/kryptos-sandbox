@@ -62,12 +62,39 @@ test("quick imports include a fresh K4-length uniform random grid", () => {
   assert.match(app, /Uniform random · 97 letters/);
 });
 
-test("whole-grid copy and paste uses structured duplication while cell copy stays textual", () => {
-  assert.match(app, /!grid\.selected\.size && state\.selectedGridIds\.length === 1/);
+test("whole-grid copy and paste uses structured bundles while cell copy stays textual", () => {
+  assert.match(app, /const copyingWholeGrids = selectedGrids\.length > 1 \|\| !grid\.selected\.size/);
+  assert.match(app, /createGridBundle\(state\.grids, selectedGrids\.map/);
+  assert.match(app, /GRID_BUNDLE_MIME/);
   assert.match(app, /application\/x-kryptos-grid/);
-  assert.match(app, /duplicateGrid\(clipboardGrid\)/);
+  assert.match(app, /pasteGridBundle\(clipboardBundle\)/);
   assert.match(app, /copiedGridClipboard = null/);
-  assert.match(html, /duplicate a copied whole grid/);
+  assert.match(html, /duplicate copied grids/);
+});
+
+test("canvas marquee supports arbitrary multi-grid selection without turning three grids into operands", () => {
+  assert.match(styles, /\.selection-marquee/);
+  assert.match(app, /hitIds = \$\$\("\.grid-card", workspace\)/);
+  assert.match(app, /state\.selectedGridIds = \[\.\.\.new Set\(\[\.\.\.initialIds, \.\.\.hitIds\]\)\]/);
+  assert.match(app, /if \(operands\.length > 2\) return null/);
+  assert.doesNotMatch(app, /state\.selectedGridIds = state\.selectedGridIds[^;]*\.slice\(0, 2\)/);
+});
+
+test("wheel zoom is pointer anchored and difference views are non-destructive", () => {
+  assert.match(app, /workspace\.addEventListener\("wheel"/);
+  assert.match(app, /setWorkspaceZoom\(state\.zoom \+ \(event\.deltaY < 0 \? \.08 : -\.08\), event\)/);
+  assert.match(app, /gridDifferenceLayout\(grid\.text, grid\.cols, grid\.differenceView, state\.alphabet\)/);
+  assert.match(app, /grid\.differenceView = view === "off" \? null : view/);
+  assert.match(app, /if \(!overlay \|\| !overlayCard \|\| overlay\.differenceView\) return/);
+  assert.match(html, /data-difference-view="horizontal"/);
+  assert.match(html, /data-difference-view="vertical"/);
+});
+
+test("expanded letter palette is validated and styled", () => {
+  for (const colour of ["violet", "rose", "cyan"]) {
+    assert.match(html, new RegExp(`data-letter-colour="${colour}"`));
+    assert.match(styles, new RegExp(`highlight-${colour}`));
+  }
 });
 
 test("creating from a live overlay produces an independent snapshot", () => {

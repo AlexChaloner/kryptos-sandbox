@@ -113,7 +113,7 @@
               <button class="tool-button icon-only" id="createSyncedView" title="Create synchronized view">⇄</button>
               <button class="tool-button icon-only danger-hover" id="deleteGrid" title="Delete selected">⌫</button>
             </div>
-            <div class="toolbar-hint"><kbd>Ctrl</kbd> + drag adds a rectangle</div>
+            <div class="toolbar-hint">Drag canvas selects grids · <kbd>Ctrl</kbd> + drag selects cells</div>
             <div class="zoom-control">
               <button id="zoomOut">−</button><span id="zoomLabel">100%</span><button id="zoomIn">＋</button>
             </div>
@@ -152,6 +152,13 @@
               <div class="mini-actions">
                 <button id="pasteText">Paste</button><button id="copyText">Copy</button><button id="applyText" class="accent">Apply</button>
               </div>
+              <label class="field-label">Difference view</label>
+              <div class="segmented difference-view-control" id="differenceView">
+                <button type="button" class="active" data-difference-view="off">Off</button>
+                <button type="button" data-difference-view="horizontal">Horizontal</button>
+                <button type="button" data-difference-view="vertical">Vertical</button>
+              </div>
+              <p class="letter-colour-help">Shows forward modular differences: right − left or below − above. The source text is unchanged.</p>
             </section>
 
             <section class="inspector-section letter-colour-section">
@@ -161,6 +168,9 @@
                 <button type="button" class="letter-colour-button blue" data-letter-colour="blue" aria-label="Colour selected letters blue" title="Blue" disabled></button>
                 <button type="button" class="letter-colour-button coral" data-letter-colour="coral" aria-label="Colour selected letters coral" title="Coral" disabled></button>
                 <button type="button" class="letter-colour-button green" data-letter-colour="green" aria-label="Colour selected letters green" title="Green" disabled></button>
+                <button type="button" class="letter-colour-button violet" data-letter-colour="violet" aria-label="Colour selected letters violet" title="Violet" disabled></button>
+                <button type="button" class="letter-colour-button rose" data-letter-colour="rose" aria-label="Colour selected letters rose" title="Rose" disabled></button>
+                <button type="button" class="letter-colour-button cyan" data-letter-colour="cyan" aria-label="Colour selected letters cyan" title="Cyan" disabled></button>
                 <button type="button" class="letter-colour-button clear" data-letter-colour="clear" aria-label="Clear colour from selected letters" title="Clear colour" disabled>×</button>
               </div>
               <p class="letter-colour-help">Select letters in a grid, then choose a colour.</p>
@@ -332,8 +342,10 @@
           <kbd>Drag cells</kbd><span>Select a horizontal strip</span>
           <kbd>Ctrl + drag</kbd><span>Add a rectangular cell selection</span>
           <kbd>Ctrl + click</kbd><span>Add a cell, or add/remove an operand via its header</span>
-          <kbd>⌘/Ctrl + C</kbd><span>Copy selected letters, or copy the whole focused grid</span>
-          <kbd>⌘/Ctrl + V</kbd><span>Paste letters, or duplicate a copied whole grid</span>
+          <kbd>Drag empty canvas</kbd><span>Select multiple grids with a marquee</span>
+          <kbd>Mouse wheel</kbd><span>Zoom around the pointer</span>
+          <kbd>⌘/Ctrl + C</kbd><span>Copy selected letters, or every selected grid</span>
+          <kbd>⌘/Ctrl + V</kbd><span>Paste letters, or duplicate copied grids</span>
           <kbd>⌘/Ctrl + A</kbd><span>Select every non-empty cell in the focused grid</span>
           <kbd>⌘/Ctrl + Z</kbd><span>Undo the last workspace change</span>
           <kbd>Esc</kbd><span>Close the top UI layer, then clear cell selections</span>
@@ -357,6 +369,6 @@
         </div>
       </div>
     </div>
-    <script type="module" src="app.js?v=22"></script>
+    <script type="module" src="app.js?v=23"></script>
   </body>
 </html>
