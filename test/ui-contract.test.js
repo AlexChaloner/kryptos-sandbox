@@ -83,11 +83,21 @@ test("canvas marquee supports arbitrary multi-grid selection without turning thr
 test("wheel zoom is pointer anchored and difference views are non-destructive", () => {
   assert.match(app, /workspace\.addEventListener\("wheel"/);
   assert.match(app, /setWorkspaceZoom\(state\.zoom \+ \(event\.deltaY < 0 \? \.08 : -\.08\), event\)/);
+  assert.match(app, /scaleCanvasPositions\(state\.grids, previousZoom, next, anchorPoint\)/);
   assert.match(app, /gridDifferenceLayout\(grid\.text, grid\.cols, grid\.differenceView, state\.alphabet\)/);
   assert.match(app, /grid\.differenceView = view === "off" \? null : view/);
   assert.match(app, /if \(!overlay \|\| !overlayCard \|\| overlay\.differenceView\) return/);
   assert.match(html, /data-difference-view="horizontal"/);
   assert.match(html, /data-difference-view="vertical"/);
+});
+
+test("typing appends to a single focused grid and batches persistence", () => {
+  assert.match(app, /function appendLetterToCurrentGrid\(letter\)/);
+  assert.match(app, /targetGrid\.text \+= letter\.toUpperCase\(\)/);
+  assert.match(app, /appendTypingTimer = setTimeout\(finishAppendTyping, 450\)/);
+  assert.match(app, /body\.scrollTop = body\.scrollHeight/);
+  assert.match(app, /removeLastLetterFromCurrentGrid/);
+  assert.match(html, /Just type A–Z or \? to append/);
 });
 
 test("expanded letter palette is validated and styled", () => {

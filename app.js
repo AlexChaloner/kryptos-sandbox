@@ -20,6 +20,7 @@ import { scanModularRoutes, bestNgramRouteOffset } from "./modules/transposition
 import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js";
 import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persistence.js";
 import { createGridBundle, instantiateGridBundle } from "./modules/grid-clipboard.js";
+import { scaleCanvasPositions } from "./modules/viewport.js";
 
 (() => {
   "use strict";
@@ -55,6 +56,10 @@ import { createGridBundle, instantiateGridBundle } from "./modules/grid-clipboar
   let compressionWorkerSignature = "";
   let compressionTimer = null;
   let compressionToken = 0;
+  let appendTypingSession = null;
+  let appendTypingTimer = null;
+  let appendRenderFrame = null;
+  let appendScrollGridId = null;
   const compressionCache = new Map();
   const STARTER_LIBRARY_VERSION = 1;
   const WORKSPACE_LIBRARY_KEY = "kryptos-workspace-library";
@@ -2103,14 +2108,17 @@ import { createGridBundle, instantiateGridBundle } from "./modules/grid-clipboar
     const previousZoom = state.zoom;
     const next = clamp(Math.round(nextZoom * 100) / 100, .5, 2);
     if (next === previousZoom) return false;
-    const anchorCard = anchor?.target?.closest?.(".grid-card")
-      || (anchor ? $(`.grid-card[data-id="${currentGrid()?.id}"]`, workspace) : null);
-    const beforeRect = anchorCard?.getBoundingClientRect();
-    const local = beforeRect ? {
-      x: (anchor.clientX - beforeRect.left) / previousZoom,
-      y: (anchor.clientY - beforeRect.top) / previousZoom,
-      id: anchorCard.dataset.id,
-    } : null;
+    const bounds = workspace.getBoundingClientRect();
+    const anchorPoint = {
+      x: workspace.scrollLeft + (anchor ? anchor.clientX - bounds.left : workspace.clientWidth / 2),
+      y: workspace.scrollTop + (anchor ? anchor.clientY - bounds.top : workspace.clientHeight / 2),
+    };
+    const scaled = scaleCanvasPositions(state.grids, previousZoom, next, anchorPoint);
+    const positions = new Map(scaled.positions.map(position => [position.id, position]));
+    state.grids.forEach(grid => {
+      const position = positions.get(grid.id);
+      if (position) { grid.x = position.x; grid.y = position.y; }
+    });
     state.zoom = next;
     reconcileOverlayState();
     state.grids.forEach(grid => {
@@ -2121,13 +2129,8 @@ import { createGridBundle, instantiateGridBundle } from "./modules/grid-clipboar
     });
     applyZoom();
     updateWorkspaceExtent();
-    if (local) {
-      const afterRect = $(`.grid-card[data-id="${local.id}"]`, workspace)?.getBoundingClientRect();
-      if (afterRect) {
-        workspace.scrollLeft += afterRect.left + local.x * next - anchor.clientX;
-        workspace.scrollTop += afterRect.top + local.y * next - anchor.clientY;
-      }
-    }
+    workspace.scrollLeft += scaled.scrollAdjustment.x;
+    workspace.scrollTop += scaled.scrollAdjustment.y;
     return true;
   }
 
@@ -2349,6 +2352,65 @@ import { createGridBundle, instantiateGridBundle } from "./modules/grid-clipboar
     setStatus(remaining.size
       ? `Typed ${letter.toUpperCase()} · ${remaining.size} selected cell${remaining.size === 1 ? "" : "s"} remaining`
       : `Finished typing into ${grid.name}`);
+    return true;
+  }
+
+  function finishAppendTyping() {
+    if (!appendTypingSession) return;
+    clearTimeout(appendTypingTimer);
+    const session = appendTypingSession;
+    appendTypingSession = null;
+    commitHistory(session.before, `edit end of ${session.name}`);
+  }
+
+  function scheduleAppendRender(gridId) {
+    appendScrollGridId = gridId;
+    if (appendRenderFrame === null) {
+      appendRenderFrame = requestAnimationFrame(() => {
+        appendRenderFrame = null;
+        renderAll();
+        const body = $(`.grid-card[data-id="${appendScrollGridId}"] .grid-card-body`, workspace);
+        if (body) {
+          body.scrollLeft = body.scrollWidth;
+          body.scrollTop = body.scrollHeight;
+        }
+      });
+    }
+    clearTimeout(appendTypingTimer);
+    appendTypingTimer = setTimeout(finishAppendTyping, 450);
+  }
+
+  function beginAppendTyping(grid) {
+    if (appendTypingSession?.gridId !== grid.id) finishAppendTyping();
+    if (!appendTypingSession) appendTypingSession = { before: captureSnapshot(), gridId: grid.id, name: grid.name };
+    return synchronizedRoot(grid);
+  }
+
+  function appendLetterToCurrentGrid(letter) {
+    const grid = currentGrid();
+    if (!grid || state.selectedGridIds.length !== 1 || grid.selected.size) return false;
+    const targetGrid = beginAppendTyping(grid);
+    targetGrid.derived = null;
+    targetGrid.text += letter.toUpperCase();
+    state.analysisFullGrid = true;
+    scheduleAppendRender(grid.id);
+    setStatus(`Appended ${letter.toUpperCase()} to ${grid.name}`);
+    return true;
+  }
+
+  function removeLastLetterFromCurrentGrid() {
+    const grid = currentGrid();
+    if (!grid || state.selectedGridIds.length !== 1 || grid.selected.size) return false;
+    const targetGrid = synchronizedRoot(grid);
+    if (!targetGrid.text.length) return false;
+    beginAppendTyping(grid);
+    targetGrid.derived = null;
+    const removedIndex = targetGrid.text.length - 1;
+    synchronizedGroup(targetGrid).forEach(item => shiftHighlightsForDeletions(item, [removedIndex]));
+    targetGrid.text = targetGrid.text.slice(0, -1);
+    state.analysisFullGrid = true;
+    scheduleAppendRender(grid.id);
+    setStatus(`Removed the final letter from ${grid.name}`);
     return true;
   }
 
@@ -2912,10 +2974,13 @@ import { createGridBundle, instantiateGridBundle } from "./modules/grid-clipboar
     });
 
     document.addEventListener("pointerdown", event => {
+      finishAppendTyping();
       if (!event.target.closest(".clone-extend-control")) closeCloneExtend();
-    });
+    }, { capture: true });
     document.addEventListener("keydown", event => {
       const command = event.ctrlKey || event.metaKey;
+      const appendKey = !command && !event.altKey && event.key.length === 1 && /^[A-Z?]$/i.test(event.key);
+      if (!appendKey && event.key !== "Backspace") finishAppendTyping();
       if (command && event.key.toLowerCase() === "z") { event.preventDefault(); event.shiftKey ? redo() : undo(); return; }
       if (command && event.key.toLowerCase() === "y") { event.preventDefault(); redo(); return; }
       if (event.key === "Escape") {
@@ -2938,13 +3003,22 @@ import { createGridBundle, instantiateGridBundle } from "./modules/grid-clipboar
         if (nudgeCurrentGrid(event.key, event.shiftKey ? 5 : 1)) event.preventDefault();
         return;
       }
-      if (event.key === "Delete" || event.key === "Backspace") {
+      if (event.key === "Backspace") {
+        event.preventDefault();
+        if (!deleteSelectedLetters()) removeLastLetterFromCurrentGrid();
+        return;
+      }
+      if (event.key === "Delete") {
         event.preventDefault();
         if (!deleteSelectedLetters()) deleteGrid();
         return;
       }
       if (!command && !event.altKey && event.key.length === 1 && /^[A-Z?]$/i.test(event.key)) {
         if (typeIntoSelection(event.key)) {
+          event.preventDefault();
+          return;
+        }
+        if (appendLetterToCurrentGrid(event.key)) {
           event.preventDefault();
           return;
         }
@@ -3011,7 +3085,7 @@ import { createGridBundle, instantiateGridBundle } from "./modules/grid-clipboar
   function enableLiveReload() {
     const developmentHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
     if (!developmentHosts.has(location.hostname)) return;
-    const sources = ["index.html", "styles.css", "app.js", "modules/cipher.js", "modules/overlay.js", "modules/analysis.js", "modules/transposition-analysis.js", "modules/grid-analysis.js", "modules/grid-clipboard.js", "modules/persistence.js", "modules/utils.js", "modules/matrix.js", "modules/context-menu.js"];
+    const sources = ["index.html", "styles.css", "app.js", "modules/cipher.js", "modules/overlay.js", "modules/analysis.js", "modules/transposition-analysis.js", "modules/grid-analysis.js", "modules/grid-clipboard.js", "modules/viewport.js", "modules/persistence.js", "modules/utils.js", "modules/matrix.js", "modules/context-menu.js"];
     let baseline = null;
     const fingerprint = async () => {
       const parts = await Promise.all(sources.map(async source => {
