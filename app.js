@@ -21,6 +21,7 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
 import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persistence.js";
 import { createGridBundle, instantiateGridBundle } from "./modules/grid-clipboard.js";
 import { scaleCanvasPositions } from "./modules/viewport.js";
+import { sourceCountFromRenderedExtent } from "./modules/grid-resize.js?v=1";
 
 (() => {
   "use strict";
@@ -660,6 +661,40 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
     if (match) grid.text = match.text;
   }
 
+  function gridDimensionsText(grid, layout) {
+    const source = `${grid.cols} × ${Math.ceil(grid.text.length / grid.cols)}`;
+    return hasDifferenceView(grid) ? `${source} → ${layout.columns} × ${layout.rows}` : source;
+  }
+
+  function renderLetterGridCells(grid, letterGrid, layout) {
+    letterGrid.style.gridTemplateColumns = `repeat(${layout.columns}, ${grid.cellSize}px)`;
+    const fragment = document.createDocumentFragment();
+    [...layout.text].forEach((letter, index) => {
+      const cell = document.createElement("div");
+      const isEmpty = !letter || letter === " ";
+      const isUnknown = letter === "?";
+      const sourceIndex = layout.sourceIndices[index];
+      const kind = layout.kinds[index];
+      const highlight = isEmpty || kind !== "source" ? null : grid.highlights?.[sourceIndex];
+      const selected = Number.isInteger(sourceIndex) && grid.selected.has(sourceIndex);
+      cell.className = `letter-cell${isEmpty ? " empty" : ""}${isUnknown ? " unknown" : ""}${kind === "horizontal" && !isEmpty ? " difference-cell difference-horizontal" : ""}${kind === "vertical" && !isEmpty ? " difference-cell difference-vertical" : ""}${highlight ? ` highlight-${highlight}` : ""}${selected ? " selected" : ""}`;
+      if (Number.isInteger(sourceIndex)) cell.dataset.index = sourceIndex;
+      cell.dataset.displayIndex = index;
+      cell.dataset.kind = kind;
+      cell.style.width = `${grid.cellSize}px`;
+      cell.style.height = `${grid.cellSize}px`;
+      cell.textContent = letter;
+      if (layout.formulas[index]) cell.title = layout.formulas[index];
+      if ($("#showIndices").checked && !isEmpty) {
+        const alphabetIndex = state.alphabet.indexOf(letter);
+        const value = alphabetIndex < 0 ? "–" : alphabetIndex;
+        cell.insertAdjacentHTML("beforeend", `<span class="cell-index">${value}</span>`);
+      }
+      fragment.appendChild(cell);
+    });
+    letterGrid.replaceChildren(fragment);
+  }
+
   function renderGrid(grid) {
     const card = document.createElement("article");
     const operandIndex = state.selectedGridIds.indexOf(grid.id);
@@ -685,7 +720,7 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
         ${(grid.derived || state.overlays.some(overlay => overlay.overlayId === grid.id)) ? '<span class="live-badge">LIVE</span>' : ""}
         ${modes.horizontal ? '<span class="difference-badge">ΔH</span>' : ""}
         ${modes.vertical ? '<span class="difference-badge vertical">ΔV</span>' : ""}
-        <span class="grid-dimensions">${hasDifferenceView(grid) ? `${grid.cols} × ${Math.ceil(grid.text.length / grid.cols)} → ${difference.columns} × ${difference.rows}` : `${grid.cols} × ${Math.ceil(grid.text.length / grid.cols)}`}</span>
+        <span class="grid-dimensions">${gridDimensionsText(grid, difference)}</span>
         <button class="grid-menu" title="Grid options">•••</button>
       </div>
       <div class="grid-card-body">
@@ -693,29 +728,7 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
       </div>
       <div class="grid-resize-handle" title="Resize and reshape grid" aria-label="Resize grid"></div>`;
     const letterGrid = $(".letter-grid", card);
-    [...difference.text].forEach((letter, index) => {
-      const cell = document.createElement("div");
-      const isEmpty = !letter || letter === " ";
-      const isUnknown = letter === "?";
-      const sourceIndex = difference.sourceIndices[index];
-      const kind = difference.kinds[index];
-      const highlight = isEmpty || kind !== "source" ? null : grid.highlights?.[sourceIndex];
-      const selected = Number.isInteger(sourceIndex) && grid.selected.has(sourceIndex);
-      cell.className = `letter-cell${isEmpty ? " empty" : ""}${isUnknown ? " unknown" : ""}${kind === "horizontal" && !isEmpty ? " difference-cell difference-horizontal" : ""}${kind === "vertical" && !isEmpty ? " difference-cell difference-vertical" : ""}${highlight ? ` highlight-${highlight}` : ""}${selected ? " selected" : ""}`;
-      if (Number.isInteger(sourceIndex)) cell.dataset.index = sourceIndex;
-      cell.dataset.displayIndex = index;
-      cell.dataset.kind = kind;
-      cell.style.width = `${grid.cellSize}px`;
-      cell.style.height = `${grid.cellSize}px`;
-      cell.textContent = letter;
-      if (difference.formulas[index]) cell.title = difference.formulas[index];
-      if ($("#showIndices").checked && !isEmpty) {
-        const alphabetIndex = state.alphabet.indexOf(letter);
-        const value = alphabetIndex < 0 ? "–" : alphabetIndex;
-        cell.insertAdjacentHTML("beforeend", `<span class="cell-index">${value}</span>`);
-      }
-      letterGrid.appendChild(cell);
-    });
+    renderLetterGridCells(grid, letterGrid, difference);
     workspace.appendChild(card);
 
     card.addEventListener("pointerdown", event => {
@@ -738,7 +751,9 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
     event.stopPropagation();
     selectGrid(grid.id, true);
     const before = captureSnapshot();
-    const start = { x: event.clientX, y: event.clientY, width: grid.width, height: grid.height };
+    const startSize = renderedGridCardSize(grid);
+    const start = { x: event.clientX, y: event.clientY, width: startSize.width, height: startSize.height };
+    const modes = differenceModes(grid);
     const textLength = grid.text.length;
     let mode = null;
     let changed = false;
@@ -753,12 +768,15 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
       grid.cols = nextColumns;
       grid.width = gridWidthForColumns(grid, nextColumns);
       grid.height = gridMinimumHeight(grid);
-      card.style.width = `${grid.width}px`;
-      card.style.height = `${grid.height}px`;
-      letterGrid.style.gridTemplateColumns = `repeat(${grid.cols}, ${grid.cellSize}px)`;
-      $(".grid-dimensions", card).textContent = `${grid.cols} × ${Math.ceil(grid.text.length / grid.cols)}`;
+      const layout = differenceLayoutForGrid(grid);
+      const renderedSize = renderedGridCardSize(grid, layout);
+      card.style.width = `${renderedSize.width}px`;
+      card.style.height = `${renderedSize.height}px`;
+      renderLetterGridCells(grid, letterGrid, layout);
+      $(".grid-dimensions", card).textContent = gridDimensionsText(grid, layout);
       if (grid.id === state.selectedGridId) $("#gridColumns").value = grid.cols;
-      setStatus(`Reshaped ${grid.name} to ${grid.cols} × ${Math.ceil(grid.text.length / grid.cols)}`);
+      updateWorkspaceExtent();
+      setStatus(`Reshaped ${grid.name} to ${gridDimensionsText(grid, layout)}`);
       changed = true;
     };
 
@@ -772,13 +790,15 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
       }
       if (mode === "width") {
         const targetWidth = Math.max(gridWidthForColumns(grid, 1), start.width + dx);
-        const columns = Math.floor((targetWidth - 18 + 2) / (grid.cellSize + 2));
+        const columns = sourceCountFromRenderedExtent(targetWidth, grid.cellSize, 20, modes.horizontal, 500);
         reshape(columns);
       } else {
         const targetHeight = Math.max(gridMinimumHeightForRows(grid, 1), start.height + dy);
-        const requestedRows = clamp(
-          Math.floor((targetHeight - 54 + 2) / (grid.cellSize + 2)),
-          1,
+        const requestedRows = sourceCountFromRenderedExtent(
+          targetHeight,
+          grid.cellSize,
+          54,
+          modes.vertical,
           Math.max(1, textLength),
         );
         reshape(Math.ceil(textLength / requestedRows));
@@ -3154,7 +3174,7 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
   function enableLiveReload() {
     const developmentHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
     if (!developmentHosts.has(location.hostname)) return;
-    const sources = ["index.html", "styles.css", "app.js", "modules/cipher.js", "modules/overlay.js", "modules/analysis.js", "modules/transposition-analysis.js", "modules/grid-analysis.js", "modules/grid-clipboard.js", "modules/viewport.js", "modules/persistence.js", "modules/utils.js", "modules/matrix.js", "modules/context-menu.js"];
+    const sources = ["index.html", "styles.css", "app.js", "modules/cipher.js", "modules/overlay.js", "modules/analysis.js", "modules/transposition-analysis.js", "modules/grid-analysis.js", "modules/grid-clipboard.js", "modules/grid-resize.js", "modules/viewport.js", "modules/persistence.js", "modules/utils.js", "modules/matrix.js", "modules/context-menu.js"];
     let baseline = null;
     const fingerprint = async () => {
       const parts = await Promise.all(sources.map(async source => {

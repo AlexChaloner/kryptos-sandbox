@@ -161,7 +161,6 @@ kbd { font: 9px "DM Mono", monospace; color: #bab9ae; border: 1px solid #4a4a44;
 .grid-card { position: absolute; contain: layout style; background: #1b1b18; border: 1px solid #41413a; border-radius: 4px; overflow: hidden; box-shadow: 0 12px 34px rgba(0,0,0,.28); transform-origin: top left; }
 .grid-resize-handle { position: absolute; right: 0; bottom: 0; width: 20px; height: 20px; cursor: nwse-resize; touch-action: none; z-index: 8; }
 .grid-resize-handle::after { content: ""; position: absolute; right: 4px; bottom: 4px; width: 8px; height: 8px; border-right: 2px solid #777568; border-bottom: 2px solid #777568; opacity: .8; }
-.grid-card.difference-expanded .grid-resize-handle { display: none; }
 .grid-card.resizing { user-select: none; box-shadow: 0 0 0 1px #7b6137, 0 12px 34px rgba(0,0,0,.34); }
 .grid-card.resizing[data-resize-mode="width"] .grid-resize-handle { cursor: ew-resize; }
 .grid-card.resizing[data-resize-mode="height"] .grid-resize-handle { cursor: ns-resize; }
