@@ -4,7 +4,7 @@ import {
   KRYPTOS_LEFT_PLATE, KRYPTOS_LEFT_PLATE_COLUMNS, KRYPTOS_RIGHT_PLATE, KRYPTOS_RIGHT_PLATE_COLUMNS,
   cleanText, cleanUnique, positionalK4Cribs, randomEnglishBookSample, randomLetters, combineAlignedCipherText, combineCipherText,
   gridDifferenceLayout,
-} from "./modules/cipher.js?v=9";
+} from "./modules/cipher.js?v=10";
 import {
   alignmentFromCellGeometry, compactSparseLayout, createOverlayLink, findOverlayLink, normalizeOverlayLinks,
   materializedOverlayLayout, overlayPosition, removeCyclicOverlayLinks, removeOverlayLinksForGrid, resolveOverlayLink,
@@ -21,7 +21,9 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
 import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persistence.js";
 import { createGridBundle, instantiateGridBundle } from "./modules/grid-clipboard.js";
 import { scaleCanvasPositions } from "./modules/viewport.js";
-import { resizeAxisForMovement, sourceCountFromRenderedExtent } from "./modules/grid-resize.js?v=2";
+import {
+  GRID_HEIGHT_CHROME, GRID_WIDTH_CHROME, columnsForResizeDrag, differenceCellSize, gridAxisExtent, gridGeometry, gridTrackSizes,
+} from "./modules/grid-resize.js?v=3";
 
 (() => {
   "use strict";
@@ -133,22 +135,17 @@ import { resizeAxisForMovement, sourceCountFromRenderedExtent } from "./modules/
     return gridDifferenceLayout(grid.text, grid.cols, differenceModes(grid), state.alphabet);
   }
 
-  function differenceViewDimensions(grid) {
+  function gridGeometryFor(grid) {
     const modes = differenceModes(grid);
-    const sourceRows = Math.max(1, Math.ceil(grid.text.length / grid.cols));
-    return {
-      columns: modes.horizontal ? grid.cols * 2 - 1 : grid.cols,
-      rows: modes.vertical ? sourceRows * 2 - 1 : sourceRows,
-    };
-  }
-
-  function renderedGridCardSize(grid, layout = null) {
-    const modes = differenceModes(grid);
-    const dimensions = layout || differenceViewDimensions(grid);
-    return {
-      width: modes.horizontal ? Math.max(grid.width, gridWidthForColumns(grid, dimensions.columns)) : grid.width,
-      height: modes.vertical ? Math.max(grid.height, gridMinimumHeightForRows(grid, dimensions.rows)) : grid.height,
-    };
+    return gridGeometry({
+      textLength: grid.text.length,
+      columns: grid.cols,
+      cellSize: grid.cellSize,
+      horizontalDifferences: modes.horizontal,
+      verticalDifferences: modes.vertical,
+      sourceWidth: grid.width,
+      sourceHeight: grid.height,
+    });
   }
 
   function synchronizedRoot(grid) {
@@ -615,11 +612,16 @@ import { resizeAxisForMovement, sourceCountFromRenderedExtent } from "./modules/
 
   function updateWorkspaceExtent() {
     const margin = 176;
-    const rightEdge = state.grids.reduce((maximum, grid) => Math.max(maximum, grid.x + renderedGridCardSize(grid).width * state.zoom), 0);
-    const bottomEdge = state.grids.reduce((maximum, grid) => Math.max(maximum, grid.y + renderedGridCardSize(grid).height * state.zoom), 0);
+    const bounds = state.grids.reduce((maximum, grid) => {
+      const geometry = gridGeometryFor(grid);
+      return {
+        right: Math.max(maximum.right, grid.x + geometry.renderedWidth * state.zoom),
+        bottom: Math.max(maximum.bottom, grid.y + geometry.renderedHeight * state.zoom),
+      };
+    }, { right: 0, bottom: 0 });
     const layer = $(".workspace-grid", workspace);
-    layer.style.width = `${Math.max(2400, workspace.clientWidth, Math.ceil(rightEdge + margin))}px`;
-    layer.style.height = `${Math.max(1600, workspace.clientHeight, Math.ceil(bottomEdge + margin))}px`;
+    layer.style.width = `${Math.max(2400, workspace.clientWidth, Math.ceil(bounds.right + margin))}px`;
+    layer.style.height = `${Math.max(1600, workspace.clientHeight, Math.ceil(bounds.bottom + margin))}px`;
   }
 
   function migrateLegacyK4Imports() {
@@ -667,7 +669,13 @@ import { resizeAxisForMovement, sourceCountFromRenderedExtent } from "./modules/
   }
 
   function renderLetterGridCells(grid, letterGrid, layout) {
-    letterGrid.style.gridTemplateColumns = `repeat(${layout.columns}, ${grid.cellSize}px)`;
+    const modes = differenceModes(grid);
+    const geometry = gridGeometryFor(grid);
+    const columnSizes = gridTrackSizes(geometry.sourceColumns, grid.cellSize, modes.horizontal);
+    const rowSizes = gridTrackSizes(geometry.sourceRows, grid.cellSize, modes.vertical);
+    const differenceSize = differenceCellSize(grid.cellSize);
+    letterGrid.style.gridTemplateColumns = columnSizes.map(size => `${size}px`).join(" ");
+    letterGrid.style.gridTemplateRows = rowSizes.map(size => `${size}px`).join(" ");
     const fragment = document.createDocumentFragment();
     [...layout.text].forEach((letter, index) => {
       const cell = document.createElement("div");
@@ -681,8 +689,11 @@ import { resizeAxisForMovement, sourceCountFromRenderedExtent } from "./modules/
       if (Number.isInteger(sourceIndex)) cell.dataset.index = sourceIndex;
       cell.dataset.displayIndex = index;
       cell.dataset.kind = kind;
-      cell.style.width = `${grid.cellSize}px`;
-      cell.style.height = `${grid.cellSize}px`;
+      const displayColumn = index % layout.columns;
+      const displayRow = Math.floor(index / layout.columns);
+      const isDifference = kind === "horizontal" || kind === "vertical";
+      cell.style.width = `${isDifference ? differenceSize : columnSizes[displayColumn]}px`;
+      cell.style.height = `${isDifference ? differenceSize : rowSizes[displayRow]}px`;
       cell.textContent = letter;
       if (layout.formulas[index]) cell.title = layout.formulas[index];
       if ($("#showIndices").checked && !isEmpty) {
@@ -710,8 +721,8 @@ import { resizeAxisForMovement, sourceCountFromRenderedExtent } from "./modules/
     const minimumHeight = gridMinimumHeightForRows(grid, 1);
     grid.width = Math.max(grid.width, minimumWidth);
     grid.height = Math.max(grid.height, contentHeight);
-    const renderedSize = renderedGridCardSize(grid, difference);
-    card.style.cssText = `left:${grid.x}px;top:${grid.y}px;width:${renderedSize.width}px;height:${renderedSize.height}px;min-width:${minimumWidth}px;min-height:${minimumHeight}px;z-index:${grid.z || 1}`;
+    const geometry = gridGeometryFor(grid);
+    card.style.cssText = `left:${grid.x}px;top:${grid.y}px;width:${geometry.renderedWidth}px;height:${geometry.renderedHeight}px;min-width:${minimumWidth}px;min-height:${minimumHeight}px;z-index:${grid.z || 1}`;
     card.innerHTML = `
       <div class="grid-card-header">
         <span class="grid-grip">⠿</span>
@@ -724,7 +735,7 @@ import { resizeAxisForMovement, sourceCountFromRenderedExtent } from "./modules/
         <button class="grid-menu" title="Grid options">•••</button>
       </div>
       <div class="grid-card-body">
-        <div class="letter-grid" style="grid-template-columns:repeat(${difference.columns}, ${grid.cellSize}px)"></div>
+        <div class="letter-grid"></div>
       </div>
       <div class="grid-resize-handle" title="Resize and reshape grid" aria-label="Resize grid"></div>`;
     const letterGrid = $(".letter-grid", card);
@@ -751,8 +762,14 @@ import { resizeAxisForMovement, sourceCountFromRenderedExtent } from "./modules/
     event.stopPropagation();
     selectGrid(grid.id, true);
     const before = captureSnapshot();
-    const startSize = renderedGridCardSize(grid);
-    const start = { x: event.clientX, y: event.clientY, width: startSize.width, height: startSize.height };
+    const startGeometry = gridGeometryFor(grid);
+    const start = {
+      x: event.clientX,
+      y: event.clientY,
+      columns: grid.cols,
+      width: startGeometry.renderedWidth,
+      height: startGeometry.renderedHeight,
+    };
     const modes = differenceModes(grid);
     const textLength = grid.text.length;
     let mode = null;
@@ -769,9 +786,9 @@ import { resizeAxisForMovement, sourceCountFromRenderedExtent } from "./modules/
       grid.width = gridWidthForColumns(grid, nextColumns);
       grid.height = gridMinimumHeight(grid);
       const layout = differenceLayoutForGrid(grid);
-      const renderedSize = renderedGridCardSize(grid, layout);
-      card.style.width = `${renderedSize.width}px`;
-      card.style.height = `${renderedSize.height}px`;
+      const geometry = gridGeometryFor(grid);
+      card.style.width = `${geometry.renderedWidth}px`;
+      card.style.height = `${geometry.renderedHeight}px`;
       renderLetterGridCells(grid, letterGrid, layout);
       $(".grid-dimensions", card).textContent = gridDimensionsText(grid, layout);
       if (grid.id === state.selectedGridId) $("#gridColumns").value = grid.cols;
@@ -784,26 +801,22 @@ import { resizeAxisForMovement, sourceCountFromRenderedExtent } from "./modules/
       const dx = (moveEvent.clientX - start.x) / state.zoom;
       const dy = (moveEvent.clientY - start.y) / state.zoom;
       if (Math.max(Math.abs(dx), Math.abs(dy)) < 4) return;
-      const nextMode = resizeAxisForMovement(dx, dy);
-      if (nextMode !== mode) {
-        mode = nextMode;
+      const resize = columnsForResizeDrag({
+        startColumns: start.columns,
+        textLength,
+        cellSize: grid.cellSize,
+        startWidth: start.width,
+        startHeight: start.height,
+        deltaX: dx,
+        deltaY: dy,
+        horizontalDifferences: modes.horizontal,
+        verticalDifferences: modes.vertical,
+      });
+      if (resize.axis !== mode) {
+        mode = resize.axis;
         card.dataset.resizeMode = mode;
       }
-      if (mode === "width") {
-        const targetWidth = Math.max(gridWidthForColumns(grid, 1), start.width + dx);
-        const columns = sourceCountFromRenderedExtent(targetWidth, grid.cellSize, 20, modes.horizontal, 500);
-        reshape(columns);
-      } else {
-        const targetHeight = Math.max(gridMinimumHeightForRows(grid, 1), start.height + dy);
-        const requestedRows = sourceCountFromRenderedExtent(
-          targetHeight,
-          grid.cellSize,
-          54,
-          modes.vertical,
-          Math.max(1, textLength),
-        );
-        reshape(Math.ceil(textLength / requestedRows));
-      }
+      reshape(resize.columns);
     };
 
     const end = () => {
@@ -1283,17 +1296,11 @@ import { resizeAxisForMovement, sourceCountFromRenderedExtent } from "./modules/
   }
 
   function gridMinimumHeightForRows(grid, rows) {
-    const headerHeight = 34;
-    const bodyPaddingAndBorders = 20;
-    const cellGap = 2;
-    const gridHeight = rows * grid.cellSize + Math.max(0, rows - 1) * cellGap;
-    return headerHeight + bodyPaddingAndBorders + gridHeight;
+    return gridAxisExtent(rows, grid.cellSize, GRID_HEIGHT_CHROME);
   }
 
   function gridWidthForColumns(grid, columns) {
-    const bodyPaddingAndBorders = 20;
-    const cellGap = 2;
-    return bodyPaddingAndBorders + columns * grid.cellSize + Math.max(0, columns - 1) * cellGap;
+    return gridAxisExtent(columns, grid.cellSize, GRID_WIDTH_CHROME);
   }
 
   function fitGridCardToContent(grid) {

@@ -196,7 +196,7 @@ kbd { font: 9px "DM Mono", monospace; color: #bab9ae; border: 1px solid #4a4a44;
 .difference-badge.vertical { color: #c9c2ef; border-color: #625b82; background: #302d43; }
 .grid-menu { width: 19px; height: 22px; border: 0; background: none; color: var(--faint); padding: 0; }
 .grid-card-body { height: calc(100% - 34px); overflow: auto; padding: 9px; scrollbar-color: #44443d transparent; scrollbar-width: thin; }
-.letter-grid { display: grid; gap: 2px; width: max-content; user-select: none; }
+.letter-grid { display: grid; align-items: center; justify-items: center; gap: 2px; width: max-content; user-select: none; }
 .letter-cell { position: relative; display: grid; place-items: center; border: 1px solid #4a4a43; background: #242420; color: #e4e3d9; font: 500 14px "DM Mono", monospace; cursor: crosshair; transition: background .08s, border-color .08s, color .08s; }
 .letter-cell:hover { background: #2e2e29; border-color: #585850; }
 .letter-cell.empty { background: transparent; border-color: transparent; color: transparent; }
@@ -211,7 +211,8 @@ kbd { font: 9px "DM Mono", monospace; color: #bab9ae; border: 1px solid #4a4a44;
 .letter-cell.highlight-violet { background: #433758; border-color: #8973b1; color: #f0e9ff; }
 .letter-cell.highlight-rose { background: #563447; border-color: #ad6688; color: #ffe8f2; }
 .letter-cell.highlight-cyan { background: #28484a; border-color: #5c9fa1; color: #e0ffff; }
-.letter-cell.difference-cell { transform: scale(.8); transform-origin: center; }
+.letter-cell.difference-cell { font-size: 10px; }
+.letter-cell.difference-cell .cell-index { right: 1px; bottom: 0; font-size: 5px; }
 .letter-cell.difference-horizontal:not([class*="highlight-"]) { border-color: #486f70; color: #c9eeee; background: #223a3b; }
 .letter-cell.difference-vertical:not([class*="highlight-"]) { border-color: #625c82; color: #e0dcff; background: #302d43; }
 .letter-cell.selected[class*="highlight-"] { box-shadow: inset 0 0 0 1px #fff5df, 0 0 0 1px rgba(0,0,0,.45); }

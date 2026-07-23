@@ -1,3 +1,5 @@
+import { renderedTrackCount } from "./grid-resize.js?v=3";
+
 export const KRYPTOS_ALPHABET = "KRYPTOSABCDEFGHIJLMNQUVWXZ";
 export const NORMAL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 export const K1_CIPHERTEXT = "EMUFPHZLRFAXYUSDJKZLDKRNSHGNFIVJYQTQUXQBQVYUVLLTREVJYQTMKYRDMFD";
@@ -110,8 +112,8 @@ export function gridDifferenceLayout(text, columns, modes = {}, alphabet = NORMA
       rows: sourceRows,
     };
   }
-  const displayColumns = horizontal ? width * 2 - 1 : width;
-  const displayRows = vertical ? sourceRows * 2 - 1 : sourceRows;
+  const displayColumns = renderedTrackCount(width, horizontal);
+  const displayRows = renderedTrackCount(sourceRows, vertical);
   const output = Array(displayColumns * displayRows).fill(" ");
   const formulas = Array(output.length).fill("");
   const sourceIndices = Array(output.length).fill(null);
