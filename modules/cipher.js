@@ -94,28 +94,62 @@ export function randomLetters(length = 97, random = Math.random) {
   return Array.from({ length: size }, () => NORMAL_ALPHABET[Math.min(25, Math.floor(random() * 26))]).join("");
 }
 
-export function gridDifferenceLayout(text, columns, direction, alphabet = NORMAL_ALPHABET) {
+export function gridDifferenceLayout(text, columns, modes = {}, alphabet = NORMAL_ALPHABET) {
   const source = String(text || "");
   const width = Math.max(1, Math.floor(Number(columns) || 1));
-  if (!new Set(["horizontal", "vertical"]).has(direction)) return { text: source, formulas: Array(source.length).fill("") };
-  const output = Array(source.length).fill(" ");
-  const formulas = Array(source.length).fill("");
-  for (let index = 0; index < source.length; index++) {
-    const previousIndex = direction === "horizontal" ? index - 1 : index - width;
-    const boundary = direction === "horizontal" ? index % width === 0 : index < width;
-    if (boundary || previousIndex < 0) continue;
-    const current = source[index];
+  const horizontal = modes === "horizontal" || modes === "both" || Boolean(modes.horizontal);
+  const vertical = modes === "vertical" || modes === "both" || Boolean(modes.vertical);
+  const sourceRows = Math.max(1, Math.ceil(source.length / width));
+  if (!horizontal && !vertical) {
+    return {
+      text: source,
+      formulas: Array(source.length).fill(""),
+      sourceIndices: Array.from({ length: source.length }, (_, index) => index),
+      kinds: Array(source.length).fill("source"),
+      columns: width,
+      rows: sourceRows,
+    };
+  }
+  const displayColumns = horizontal ? width * 2 - 1 : width;
+  const displayRows = vertical ? sourceRows * 2 - 1 : sourceRows;
+  const output = Array(displayColumns * displayRows).fill(" ");
+  const formulas = Array(output.length).fill("");
+  const sourceIndices = Array(output.length).fill(null);
+  const kinds = Array(output.length).fill("empty");
+  const displayIndex = (row, column) => row * displayColumns + column;
+  const difference = (currentIndex, previousIndex, targetIndex, kind) => {
+    const current = source[currentIndex];
     const previous = source[previousIndex];
-    if (current === " " || previous === " ") continue;
+    if (current === " " || previous === " ") return;
     const currentValue = alphabet.indexOf(current);
     const previousValue = alphabet.indexOf(previous);
-    const difference = currentValue < 0 || previousValue < 0
+    const letter = currentValue < 0 || previousValue < 0
       ? "?"
       : alphabet[(currentValue - previousValue + alphabet.length) % alphabet.length];
-    output[index] = difference;
-    formulas[index] = `${current} − ${previous} = ${difference}`;
+    output[targetIndex] = letter;
+    formulas[targetIndex] = `${current} − ${previous} = ${letter}`;
+    sourceIndices[targetIndex] = currentIndex;
+    kinds[targetIndex] = kind;
+  };
+  for (let row = 0; row < sourceRows; row++) {
+    for (let column = 0; column < width; column++) {
+      const sourceIndex = row * width + column;
+      if (sourceIndex >= source.length) continue;
+      const targetRow = vertical ? row * 2 : row;
+      const targetColumn = horizontal ? column * 2 : column;
+      const targetIndex = displayIndex(targetRow, targetColumn);
+      output[targetIndex] = source[sourceIndex];
+      sourceIndices[targetIndex] = sourceIndex;
+      kinds[targetIndex] = "source";
+      if (horizontal && column + 1 < width && sourceIndex + 1 < source.length) {
+        difference(sourceIndex + 1, sourceIndex, displayIndex(targetRow, targetColumn + 1), "horizontal");
+      }
+      if (vertical && row + 1 < sourceRows && sourceIndex + width < source.length) {
+        difference(sourceIndex + width, sourceIndex, displayIndex(targetRow + 1, targetColumn), "vertical");
+      }
+    }
   }
-  return { text: output.join(""), formulas };
+  return { text: output.join(""), formulas, sourceIndices, kinds, columns: displayColumns, rows: displayRows };
 }
 
 export const GRID_OPERATIONS = {

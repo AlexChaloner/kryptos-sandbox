@@ -4,7 +4,7 @@ import {
   KRYPTOS_LEFT_PLATE, KRYPTOS_LEFT_PLATE_COLUMNS, KRYPTOS_RIGHT_PLATE, KRYPTOS_RIGHT_PLATE_COLUMNS,
   cleanText, cleanUnique, positionalK4Cribs, randomEnglishBookSample, randomLetters, combineAlignedCipherText, combineCipherText,
   gridDifferenceLayout,
-} from "./modules/cipher.js?v=8";
+} from "./modules/cipher.js?v=9";
 import {
   alignmentFromCellGeometry, compactSparseLayout, createOverlayLink, findOverlayLink, normalizeOverlayLinks,
   materializedOverlayLayout, overlayPosition, removeCyclicOverlayLinks, removeOverlayLinksForGrid, resolveOverlayLink,
@@ -113,6 +113,41 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
 
   function currentGrid() {
     return state.grids.find(grid => grid.id === state.selectedGridId) || null;
+  }
+
+  function differenceModes(grid) {
+    const legacy = grid?.differenceView;
+    return {
+      horizontal: Boolean(grid?.differenceHorizontal || legacy === "horizontal" || legacy === "both"),
+      vertical: Boolean(grid?.differenceVertical || legacy === "vertical" || legacy === "both"),
+    };
+  }
+
+  function hasDifferenceView(grid) {
+    const modes = differenceModes(grid);
+    return modes.horizontal || modes.vertical;
+  }
+
+  function differenceLayoutForGrid(grid) {
+    return gridDifferenceLayout(grid.text, grid.cols, differenceModes(grid), state.alphabet);
+  }
+
+  function differenceViewDimensions(grid) {
+    const modes = differenceModes(grid);
+    const sourceRows = Math.max(1, Math.ceil(grid.text.length / grid.cols));
+    return {
+      columns: modes.horizontal ? grid.cols * 2 - 1 : grid.cols,
+      rows: modes.vertical ? sourceRows * 2 - 1 : sourceRows,
+    };
+  }
+
+  function renderedGridCardSize(grid, layout = null) {
+    const modes = differenceModes(grid);
+    const dimensions = layout || differenceViewDimensions(grid);
+    return {
+      width: modes.horizontal ? Math.max(grid.width, gridWidthForColumns(grid, dimensions.columns)) : grid.width,
+      height: modes.vertical ? Math.max(grid.height, gridMinimumHeightForRows(grid, dimensions.rows)) : grid.height,
+    };
   }
 
   function synchronizedRoot(grid) {
@@ -579,8 +614,8 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
 
   function updateWorkspaceExtent() {
     const margin = 176;
-    const rightEdge = state.grids.reduce((maximum, grid) => Math.max(maximum, grid.x + grid.width * state.zoom), 0);
-    const bottomEdge = state.grids.reduce((maximum, grid) => Math.max(maximum, grid.y + grid.height * state.zoom), 0);
+    const rightEdge = state.grids.reduce((maximum, grid) => Math.max(maximum, grid.x + renderedGridCardSize(grid).width * state.zoom), 0);
+    const bottomEdge = state.grids.reduce((maximum, grid) => Math.max(maximum, grid.y + renderedGridCardSize(grid).height * state.zoom), 0);
     const layer = $(".workspace-grid", workspace);
     layer.style.width = `${Math.max(2400, workspace.clientWidth, Math.ceil(rightEdge + margin))}px`;
     layer.style.height = `${Math.max(1600, workspace.clientHeight, Math.ceil(bottomEdge + margin))}px`;
@@ -630,28 +665,31 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
     const operandIndex = state.selectedGridIds.indexOf(grid.id);
     const showOperand = operandIndex >= 0 && state.selectedGridIds.length <= 2;
     const isOverlayTop = state.overlays.some(overlay => overlay.overlayId === grid.id);
-    card.className = `grid-card${operandIndex >= 0 ? " selected" : ""}${grid.id === state.selectedGridId ? " primary" : ""}${isOverlayTop ? " overlay-top" : ""}`;
+    card.className = `grid-card${operandIndex >= 0 ? " selected" : ""}${grid.id === state.selectedGridId ? " primary" : ""}${isOverlayTop ? " overlay-top" : ""}${hasDifferenceView(grid) ? " difference-expanded" : ""}`;
     card.dataset.id = grid.id;
     if (showOperand) card.dataset.operand = String.fromCharCode(65 + operandIndex);
-    const difference = gridDifferenceLayout(grid.text, grid.cols, grid.differenceView, state.alphabet);
+    const modes = differenceModes(grid);
+    const difference = differenceLayoutForGrid(grid);
     const minimumWidth = grid.cellSize + 20;
     const contentHeight = gridMinimumHeight(grid);
     const minimumHeight = gridMinimumHeightForRows(grid, 1);
     grid.width = Math.max(grid.width, minimumWidth);
     grid.height = Math.max(grid.height, contentHeight);
-    card.style.cssText = `left:${grid.x}px;top:${grid.y}px;width:${grid.width}px;height:${grid.height}px;min-width:${minimumWidth}px;min-height:${minimumHeight}px;z-index:${grid.z || 1}`;
+    const renderedSize = renderedGridCardSize(grid, difference);
+    card.style.cssText = `left:${grid.x}px;top:${grid.y}px;width:${renderedSize.width}px;height:${renderedSize.height}px;min-width:${minimumWidth}px;min-height:${minimumHeight}px;z-index:${grid.z || 1}`;
     card.innerHTML = `
       <div class="grid-card-header">
         <span class="grid-grip">⠿</span>
         <span class="grid-card-title">${escapeHtml(grid.name)}</span>
         ${grid.syncSourceId ? '<span class="sync-badge">SYNC</span>' : ""}
         ${(grid.derived || state.overlays.some(overlay => overlay.overlayId === grid.id)) ? '<span class="live-badge">LIVE</span>' : ""}
-        ${grid.differenceView === "horizontal" ? '<span class="difference-badge">ΔH</span>' : grid.differenceView === "vertical" ? '<span class="difference-badge">ΔV</span>' : ""}
-        <span class="grid-dimensions">${grid.cols} × ${Math.ceil(grid.text.length / grid.cols)}</span>
+        ${modes.horizontal ? '<span class="difference-badge">ΔH</span>' : ""}
+        ${modes.vertical ? '<span class="difference-badge vertical">ΔV</span>' : ""}
+        <span class="grid-dimensions">${hasDifferenceView(grid) ? `${grid.cols} × ${Math.ceil(grid.text.length / grid.cols)} → ${difference.columns} × ${difference.rows}` : `${grid.cols} × ${Math.ceil(grid.text.length / grid.cols)}`}</span>
         <button class="grid-menu" title="Grid options">•••</button>
       </div>
       <div class="grid-card-body">
-        <div class="letter-grid" style="grid-template-columns:repeat(${grid.cols}, ${grid.cellSize}px)"></div>
+        <div class="letter-grid" style="grid-template-columns:repeat(${difference.columns}, ${grid.cellSize}px)"></div>
       </div>
       <div class="grid-resize-handle" title="Resize and reshape grid" aria-label="Resize grid"></div>`;
     const letterGrid = $(".letter-grid", card);
@@ -659,9 +697,14 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
       const cell = document.createElement("div");
       const isEmpty = !letter || letter === " ";
       const isUnknown = letter === "?";
-      const highlight = isEmpty ? null : grid.highlights?.[index];
-      cell.className = `letter-cell${isEmpty ? " empty" : ""}${isUnknown ? " unknown" : ""}${grid.differenceView && !isEmpty ? " difference-cell" : ""}${highlight ? ` highlight-${highlight}` : ""}${grid.selected.has(index) ? " selected" : ""}`;
-      cell.dataset.index = index;
+      const sourceIndex = difference.sourceIndices[index];
+      const kind = difference.kinds[index];
+      const highlight = isEmpty || kind !== "source" ? null : grid.highlights?.[sourceIndex];
+      const selected = Number.isInteger(sourceIndex) && grid.selected.has(sourceIndex);
+      cell.className = `letter-cell${isEmpty ? " empty" : ""}${isUnknown ? " unknown" : ""}${kind === "horizontal" && !isEmpty ? " difference-cell difference-horizontal" : ""}${kind === "vertical" && !isEmpty ? " difference-cell difference-vertical" : ""}${highlight ? ` highlight-${highlight}` : ""}${selected ? " selected" : ""}`;
+      if (Number.isInteger(sourceIndex)) cell.dataset.index = sourceIndex;
+      cell.dataset.displayIndex = index;
+      cell.dataset.kind = kind;
       cell.style.width = `${grid.cellSize}px`;
       cell.style.height = `${grid.cellSize}px`;
       cell.textContent = letter;
@@ -892,11 +935,12 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
   }
 
   function findOverlapTarget(grid, card) {
+    if (hasDifferenceView(grid)) return null;
     const a = visibleGridBounds(card);
     let best = null;
     let bestArea = 0;
     state.grids.forEach(candidate => {
-      if (candidate.id === grid.id) return;
+      if (candidate.id === grid.id || hasDifferenceView(candidate)) return;
       const element = $(`.grid-card[data-id="${candidate.id}"]`, workspace);
       if (!element) return;
       const b = visibleGridBounds(element);
@@ -969,7 +1013,7 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
   }
 
   function renderLiveOverlay(base, overlay, overlayCard) {
-    if (overlay.differenceView) {
+    if (hasDifferenceView(overlay)) {
       clearLiveOverlay(overlayCard);
       clearLiveOverlayAnalysisPreview(overlay.id);
       return;
@@ -1085,7 +1129,7 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
       if (!resolved) return;
       const { overlay } = resolved;
       const overlayCard = $(`.grid-card[data-id="${link.overlayId}"]`, workspace);
-      if (!overlay || !overlayCard || overlay.differenceView) return;
+      if (!overlay || !overlayCard || hasDifferenceView(overlay)) return;
       applyLiveOverlayResult(resolved, overlayCard);
     });
   }
@@ -1146,12 +1190,12 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
 
   function beginCellSelection(event, grid, card) {
     const cell = event.target.closest(".letter-cell");
-    if (!cell || event.button !== 0 || state.tool !== "select") return;
+    const anchor = Number(cell?.dataset.index);
+    if (!cell || !Number.isInteger(anchor) || event.button !== 0 || state.tool !== "select") return;
     event.preventDefault();
     event.stopPropagation();
     const historyBefore = captureSnapshot();
     selectGrid(grid.id, true);
-    const anchor = Number(cell.dataset.index);
     const rectangular = event.ctrlKey || event.metaKey;
     const base = rectangular ? new Set(grid.selected) : new Set();
     if (!rectangular) grid.selected.clear();
@@ -1208,7 +1252,8 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
   }
 
   function cellAt(card, index) {
-    return $(`.letter-cell[data-index="${index}"]`, card);
+    return $(`.letter-cell[data-index="${index}"][data-kind="source"]`, card)
+      || $(`.letter-cell[data-index="${index}"]`, card);
   }
 
   function gridMinimumHeight(grid) {
@@ -1548,8 +1593,11 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
     const canColour = Boolean(grid && [...grid.selected].some(index => grid.text[index] && grid.text[index] !== " "));
     $$(".letter-colour-button").forEach(button => { button.disabled = !canColour; });
     $$("#differenceView button").forEach(button => {
+      const modes = differenceModes(grid);
       button.disabled = !grid;
-      button.classList.toggle("active", button.dataset.differenceView === (grid?.differenceView || "off"));
+      const active = Boolean(modes[button.dataset.differenceAxis]);
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
     });
     updateAlphabetPreview();
     updateAnalysis();
@@ -1558,16 +1606,19 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
   function currentAnalysisLayout() {
     const grid = currentGrid();
     if (!grid) return null;
-    if (grid.differenceView) {
-      const difference = gridDifferenceLayout(grid.text, grid.cols, grid.differenceView, state.alphabet);
+    if (hasDifferenceView(grid)) {
+      const modes = differenceModes(grid);
+      const difference = differenceLayoutForGrid(grid);
+      const axes = modes.horizontal && modes.vertical ? "HORIZONTAL + VERTICAL" : modes.horizontal ? "HORIZONTAL" : "VERTICAL";
       return {
-        id: `${grid.id}:difference:${grid.differenceView}:${state.alphabet}`,
+        id: `${grid.id}:difference:${modes.horizontal ? "h" : ""}${modes.vertical ? "v" : ""}:${state.alphabet}`,
         gridId: grid.id,
         text: difference.text,
-        cols: grid.cols,
+        cols: difference.columns,
+        sourceIndices: difference.sourceIndices,
         isOverlay: false,
         isDifference: true,
-        label: grid.differenceView === "horizontal" ? "HORIZONTAL DIFFERENCE" : "VERTICAL DIFFERENCE",
+        label: `${axes} DIFFERENCES`,
       };
     }
     if (liveOverlayAnalysisPreview?.gridId === grid.id) return liveOverlayAnalysisPreview;
@@ -1600,6 +1651,17 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
     const grid = currentGrid();
     if (!grid || !layout) return "";
     if (!grid.selected.size) return layout.text;
+    if (layout.sourceIndices) {
+      const indices = [...layout.text]
+        .map((_, index) => grid.selected.has(layout.sourceIndices[index]) ? index : null)
+        .filter(Number.isInteger);
+      if (grid.selectionOrientation === "vertical") {
+        const rows = Math.ceil(layout.text.length / layout.cols);
+        indices.sort((a, b) => (a % layout.cols) * rows + Math.floor(a / layout.cols)
+          - ((b % layout.cols) * rows + Math.floor(b / layout.cols)));
+      }
+      return indices.map(index => layout.text[index]).join("");
+    }
     return orderedSelectionIndices(grid, layout.cols, layout.text.length).map(index => layout.text[index]).join("");
   }
 
@@ -2145,15 +2207,17 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
   }
 
   function formatGridForClipboard(grid) {
-    const visibleText = gridDifferenceLayout(grid.text, grid.cols, grid.differenceView, state.alphabet).text;
-    if (grid.selected.size) return orderedSelectionIndices(grid).map(index => visibleText[index]).join("");
+    const layout = differenceLayoutForGrid(grid);
+    if (grid.selected.size && layout.sourceIndices) {
+      return [...layout.text].filter((_, index) => grid.selected.has(layout.sourceIndices[index])).join("");
+    }
     return formatWholeGridForClipboard(grid);
   }
 
   function formatWholeGridForClipboard(grid) {
-    const visibleText = gridDifferenceLayout(grid.text, grid.cols, grid.differenceView, state.alphabet).text;
+    const layout = differenceLayoutForGrid(grid);
     const rows = [];
-    for (let index = 0; index < visibleText.length; index += grid.cols) rows.push(visibleText.slice(index, index + grid.cols));
+    for (let index = 0; index < layout.text.length; index += layout.columns) rows.push(layout.text.slice(index, index + layout.columns));
     return rows.join("\n");
   }
 
@@ -2466,15 +2530,20 @@ import { scaleCanvasPositions } from "./modules/viewport.js";
     $("#compactGrid").addEventListener("click", compactSelectedGrid);
     $$(".letter-colour-button").forEach(button => button.addEventListener("click", () => colourSelectedLetters(button.dataset.letterColour)));
     $("#differenceView").addEventListener("click", event => {
-      const button = event.target.closest("[data-difference-view]");
+      const button = event.target.closest("[data-difference-axis]");
       const grid = currentGrid();
       if (!button || !grid) return;
       const before = captureSnapshot();
-      const view = button.dataset.differenceView;
-      grid.differenceView = view === "off" ? null : view;
+      const axis = button.dataset.differenceAxis;
+      const modes = differenceModes(grid);
+      grid.differenceHorizontal = axis === "horizontal" ? !modes.horizontal : modes.horizontal;
+      grid.differenceVertical = axis === "vertical" ? !modes.vertical : modes.vertical;
+      delete grid.differenceView;
       renderAll();
-      commitHistory(before, `${view === "off" ? "disable" : `show ${view}`} difference view for ${grid.name}`);
-      setStatus(view === "off" ? `Showing source letters in ${grid.name}` : `Showing ${view} forward differences in ${grid.name}`);
+      commitHistory(before, `toggle ${axis} differences for ${grid.name}`);
+      const active = differenceModes(grid);
+      const label = active.horizontal && active.vertical ? "horizontal and vertical" : active.horizontal ? "horizontal" : active.vertical ? "vertical" : "no";
+      setStatus(`Showing ${label} differences in ${grid.name}`);
     });
 
     $$(".tool-button[data-mode]").forEach(button => button.addEventListener("click", () => {

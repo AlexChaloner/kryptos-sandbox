@@ -154,12 +154,11 @@
               </div>
               <p class="letter-colour-help typing-help">No cells selected? Just type A–Z or ? to append to this grid. Backspace removes the last letter.</p>
               <label class="field-label">Difference view</label>
-              <div class="segmented difference-view-control" id="differenceView">
-                <button type="button" class="active" data-difference-view="off">Off</button>
-                <button type="button" data-difference-view="horizontal">Horizontal</button>
-                <button type="button" data-difference-view="vertical">Vertical</button>
+              <div class="difference-view-control" id="differenceView">
+                <button type="button" data-difference-axis="horizontal" aria-pressed="false"><span>ΔH</span>Horizontal</button>
+                <button type="button" data-difference-axis="vertical" aria-pressed="false"><span>ΔV</span>Vertical</button>
               </div>
-              <p class="letter-colour-help">Shows forward modular differences: right − left or below − above. The source text is unchanged.</p>
+              <p class="letter-colour-help">Inserts forward modular differences between the source letters: right − left or below − above. Enable either axis or both; the source text is unchanged.</p>
             </section>
 
             <section class="inspector-section letter-colour-section">
@@ -372,6 +371,6 @@
         </div>
       </div>
     </div>
-    <script type="module" src="app.js?v=24"></script>
+    <script type="module" src="app.js?v=25"></script>
   </body>
 </html>

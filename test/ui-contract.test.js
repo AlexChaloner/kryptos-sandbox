@@ -84,11 +84,14 @@ test("wheel zoom is pointer anchored and difference views are non-destructive", 
   assert.match(app, /workspace\.addEventListener\("wheel"/);
   assert.match(app, /setWorkspaceZoom\(state\.zoom \+ \(event\.deltaY < 0 \? \.08 : -\.08\), event\)/);
   assert.match(app, /scaleCanvasPositions\(state\.grids, previousZoom, next, anchorPoint\)/);
-  assert.match(app, /gridDifferenceLayout\(grid\.text, grid\.cols, grid\.differenceView, state\.alphabet\)/);
-  assert.match(app, /grid\.differenceView = view === "off" \? null : view/);
-  assert.match(app, /if \(!overlay \|\| !overlayCard \|\| overlay\.differenceView\) return/);
-  assert.match(html, /data-difference-view="horizontal"/);
-  assert.match(html, /data-difference-view="vertical"/);
+  assert.match(app, /gridDifferenceLayout\(grid\.text, grid\.cols, differenceModes\(grid\), state\.alphabet\)/);
+  assert.match(app, /grid\.differenceHorizontal = axis === "horizontal"/);
+  assert.match(app, /grid\.differenceVertical = axis === "vertical"/);
+  assert.match(app, /if \(!overlay \|\| !overlayCard \|\| hasDifferenceView\(overlay\)\) return/);
+  assert.match(app, /grid\.cols \* 2 - 1/);
+  assert.match(app, /sourceRows \* 2 - 1/);
+  assert.match(html, /data-difference-axis="horizontal"/);
+  assert.match(html, /data-difference-axis="vertical"/);
 });
 
 test("typing appends to a single focused grid and batches persistence", () => {
