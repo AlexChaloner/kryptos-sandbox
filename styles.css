@@ -212,6 +212,7 @@ kbd { font: 9px "DM Mono", monospace; color: #bab9ae; border: 1px solid #4a4a44;
 .letter-cell.highlight-violet { background: #433758; border-color: #8973b1; color: #f0e9ff; }
 .letter-cell.highlight-rose { background: #563447; border-color: #ad6688; color: #ffe8f2; }
 .letter-cell.highlight-cyan { background: #28484a; border-color: #5c9fa1; color: #e0ffff; }
+.letter-cell.difference-cell { transform: scale(.8); transform-origin: center; }
 .letter-cell.difference-horizontal:not([class*="highlight-"]) { border-color: #486f70; color: #c9eeee; background: #223a3b; }
 .letter-cell.difference-vertical:not([class*="highlight-"]) { border-color: #625c82; color: #e0dcff; background: #302d43; }
 .letter-cell.selected[class*="highlight-"] { box-shadow: inset 0 0 0 1px #fff5df, 0 0 0 1px rgba(0,0,0,.45); }

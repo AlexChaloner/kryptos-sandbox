@@ -92,6 +92,7 @@ test("wheel zoom is pointer anchored and difference views are non-destructive", 
   assert.match(app, /sourceRows \* 2 - 1/);
   assert.match(html, /data-difference-axis="horizontal"/);
   assert.match(html, /data-difference-axis="vertical"/);
+  assert.match(styles, /\.letter-cell\.difference-cell\s*\{\s*transform:\s*scale\(\.8\)/);
 });
 
 test("typing appends to a single focused grid and batches persistence", () => {
