@@ -21,7 +21,7 @@ import { scanGridDiagnostics, scanGridRoutes } from "./modules/grid-analysis.js"
 import { readWorkspaceLibrary, writeWorkspaceLibrary } from "./modules/persistence.js";
 import { createGridBundle, instantiateGridBundle } from "./modules/grid-clipboard.js";
 import { scaleCanvasPositions } from "./modules/viewport.js";
-import { sourceCountFromRenderedExtent } from "./modules/grid-resize.js?v=1";
+import { resizeAxisForMovement, sourceCountFromRenderedExtent } from "./modules/grid-resize.js?v=2";
 
 (() => {
   "use strict";
@@ -783,9 +783,10 @@ import { sourceCountFromRenderedExtent } from "./modules/grid-resize.js?v=1";
     const move = moveEvent => {
       const dx = (moveEvent.clientX - start.x) / state.zoom;
       const dy = (moveEvent.clientY - start.y) / state.zoom;
-      if (!mode) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) < 4) return;
-        mode = Math.abs(dx) >= Math.abs(dy) ? "width" : "height";
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 4) return;
+      const nextMode = resizeAxisForMovement(dx, dy);
+      if (nextMode !== mode) {
+        mode = nextMode;
         card.dataset.resizeMode = mode;
       }
       if (mode === "width") {

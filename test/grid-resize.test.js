@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { renderedTrackCount, sourceCountFromRenderedExtent } from "../modules/grid-resize.js";
+import { renderedTrackCount, resizeAxisForMovement, sourceCountFromRenderedExtent } from "../modules/grid-resize.js";
 
 const CELL_SIZE = 28;
 const WIDTH_CHROME = 20;
@@ -30,4 +30,11 @@ test("ordinary axes and resize limits remain supported", () => {
   assert.equal(sourceCountFromRenderedExtent(width, CELL_SIZE, WIDTH_CHROME, false), 10);
   assert.equal(sourceCountFromRenderedExtent(1_000_000, CELL_SIZE, WIDTH_CHROME, true, 500), 500);
   assert.equal(sourceCountFromRenderedExtent(-1_000, CELL_SIZE, HEIGHT_CHROME, true, 100), 1);
+});
+
+test("resize direction can switch freely during one diagonal drag", () => {
+  assert.equal(resizeAxisForMovement(5, 9), "height");
+  assert.equal(resizeAxisForMovement(12, 9), "width");
+  assert.equal(resizeAxisForMovement(12, 18), "height");
+  assert.equal(resizeAxisForMovement(24, 18), "width");
 });

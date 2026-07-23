@@ -94,6 +94,8 @@ test("wheel zoom is pointer anchored and difference views are non-destructive", 
   assert.match(html, /data-difference-axis="vertical"/);
   assert.match(styles, /\.letter-cell\.difference-cell\s*\{\s*transform:\s*scale\(\.8\)/);
   assert.match(app, /const startSize = renderedGridCardSize\(grid\)/);
+  assert.match(app, /const nextMode = resizeAxisForMovement\(dx, dy\)/);
+  assert.match(app, /if \(nextMode !== mode\)/);
   assert.match(app, /sourceCountFromRenderedExtent\(targetWidth, grid\.cellSize, 20, modes\.horizontal, 500\)/);
   assert.match(app, /renderLetterGridCells\(grid, letterGrid, layout\)/);
   assert.doesNotMatch(styles, /\.grid-card\.difference-expanded \.grid-resize-handle\s*\{\s*display:\s*none/);
